@@ -1,0 +1,16 @@
+{
+  "name": "Focus Time App",
+  "short_name": "Focus Time",
+  "description": "Ứng dụng quản lý thời gian học tập",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "192x192",
+      "type": "image/x-icon"
+    }
+  ]
+}
