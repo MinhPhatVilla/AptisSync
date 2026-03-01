@@ -44,6 +44,11 @@ export default function AptisIntensivePage() {
   const [viVoices, setViVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceIndex, setSelectedVoiceIndex] = useState<number>(0);
 
+  // Gamification Settings
+  const [stars, setStars] = useState(0); // Gold Stars
+  const [silverStars, setSilverStars] = useState(0); // Silver Stars
+  const [failedDays, setFailedDays] = useState(0);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setUser(session?.user ?? null));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e: string, session: Session | null) => setUser(session?.user ?? null));
@@ -72,6 +77,9 @@ export default function AptisIntensivePage() {
     if (updates.timeLeft !== undefined) dbUpdates.time_left = updates.timeLeft;
     if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
     if (updates.isPausedDay !== undefined) dbUpdates.is_paused_day = updates.isPausedDay;
+    if (updates.stars !== undefined) dbUpdates.stars = updates.stars;
+    if (updates.silverStars !== undefined) dbUpdates.silver_stars = updates.silverStars;
+    if (updates.failed_days !== undefined) dbUpdates.failed_days = updates.failed_days;
 
     await supabase.from('user_state').upsert(dbUpdates);
   };
@@ -88,6 +96,9 @@ export default function AptisIntensivePage() {
         if (data.time_left !== undefined) setTimeLeft(data.time_left);
         if (data.is_paused_day !== undefined) setIsPausedDay(data.is_paused_day);
         if (data.is_active !== undefined) setIsActive(data.is_active);
+        if (data.stars !== undefined) setStars(data.stars);
+        if (data.silver_stars !== undefined) setSilverStars(data.silver_stars);
+        if (data.failed_days !== undefined) setFailedDays(data.failed_days);
         if (data.schedule) {
           setGeneratedSchedule(data.schedule);
           if (data.schedule.length > 0) setPlanStep(3);
@@ -105,6 +116,9 @@ export default function AptisIntensivePage() {
       if (newState.timeLeft !== undefined) setTimeLeft(newState.timeLeft);
       if (newState.isActive !== undefined) setIsActive(newState.isActive);
       if (newState.isPausedDay !== undefined) setIsPausedDay(newState.isPausedDay);
+      if (newState.stars !== undefined) setStars(newState.stars);
+      if (newState.silver_stars !== undefined) setSilverStars(newState.silver_stars);
+      if (newState.failed_days !== undefined) setFailedDays(newState.failed_days);
       if (newState.schedule) {
         setGeneratedSchedule(newState.schedule);
         if (newState.schedule.length > 0) setPlanStep(3);
@@ -268,14 +282,50 @@ export default function AptisIntensivePage() {
     setGeneratedSchedule(schedule);
     setPlanStep(3);
 
-    syncAndBroadcast({
-      schedule,
-      blocks: INITIAL_BLOCKS,
-      activeBlockIndex: 0,
-      timeLeft: 0,
-      isActive: false,
-      isPausedDay: false
-    });
+    // Lưu tạm schedule sinh ra (chưa reset blocks để không ghi đè tiến độ hnay)
+  };
+
+  const handleSleepConfirmation = () => {
+    // 1. Phân tích kết quả thực hiện của ngày hôm nay
+    if (blocks.some(b => b.completed) || isActive) {
+      // Nếu hôm nay có chơi/học, tiến hành đánh giá
+      const allDone = blocks.every(b => b.completed);
+      let newStars = stars;
+      let newFailed = failedDays;
+      if (allDone) {
+        newStars += 1;
+        speakAnnounce("Chúc mừng anh đã hoàn thành xuất sắc mục tiêu hôm nay. Được cộng 1 sao hoàn hảo! Chúc anh ngủ ngon.");
+      } else {
+        newFailed += 1;
+        speakAnnounce("Hôm nay anh chưa hoàn thành 100 phần trăm mục tiêu. Đã đánh dấu chưa hoàn thiện! Hãy cố gắng phục thù vào ngày kế tiếp nhé! Chúc anh ngủ ngon.");
+      }
+      setStars(newStars);
+      setFailedDays(newFailed);
+
+      syncAndBroadcast({
+        schedule: generatedSchedule,
+        blocks: INITIAL_BLOCKS,
+        activeBlockIndex: 0,
+        timeLeft: 0,
+        isActive: false,
+        isPausedDay: false,
+        stars: newStars,
+        failed_days: newFailed
+      });
+    } else {
+      // Chỉ setup lịch mai mà hôm nay chưa đụng vô block nào thì không trừ điểm
+      syncAndBroadcast({
+        schedule: generatedSchedule,
+        blocks: INITIAL_BLOCKS,
+        activeBlockIndex: 0,
+        timeLeft: 0,
+        isActive: false,
+        isPausedDay: false
+      });
+    }
+
+    setPlanStep(0);
+    setIsPlanning(false);
   };
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -490,6 +540,11 @@ export default function AptisIntensivePage() {
     newBlocks[index].completed = true;
     setBlocks(newBlocks);
 
+    // Reward a silver star
+    const newSilverStars = silverStars + 1;
+    setSilverStars(newSilverStars);
+    speakAnnounce(`Chúc mừng anh. Đã hoàn thành một chu kỳ học thành công. Được cộng 1 sao bạc vào quỹ thành tích.`);
+
     let nextIndex = index;
     // Auto move to next block if available
     if (index + 1 < blocks.length) {
@@ -497,7 +552,7 @@ export default function AptisIntensivePage() {
       setActiveBlockIndex(nextIndex);
       setTimeLeft(newBlocks[nextIndex].durationMins * 60);
     }
-    syncAndBroadcast({ blocks: newBlocks, activeBlockIndex: nextIndex });
+    syncAndBroadcast({ blocks: newBlocks, activeBlockIndex: nextIndex, silverStars: newSilverStars });
   };
 
   const toggleTimer = () => {
@@ -562,11 +617,22 @@ export default function AptisIntensivePage() {
       {/* Header Info */}
       <div className="flex justify-between items-center mb-8 pt-8">
         <div>
-          <p className="text-[10px] uppercase font-mono tracking-[0.3em] text-blue-500/80 mb-1.5">Powered by MINH PHÁT VILLA</p>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white uppercase flex items-center">
-            Aptis Intensive <span className="ml-3 w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)] animate-pulse"></span>
-          </h1>
-          <p className="text-blue-500/70 text-xs md:text-sm tracking-widest uppercase mt-1 font-mono">Countdown: 21 Days left</p>
+          <p className="text-[10px] uppercase font-mono tracking-[0.3em] text-blue-500/80 mb-1.5 flex gap-3">
+            <span>Powered by MINH PHÁT VILLA</span>
+          </p>
+          <div className="flex items-center">
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white uppercase flex items-center">
+              Aptis Intensive <span className="ml-3 w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)] animate-pulse"></span>
+            </h1>
+          </div>
+          <div className="flex gap-4 mt-2">
+            <p className="text-blue-500/70 text-xs md:text-sm tracking-widest uppercase font-mono bg-blue-900/20 px-2 py-0.5 rounded border border-blue-900/50">Countdown: 21 Days</p>
+            <div className="flex gap-2">
+              <span className="text-yellow-500 text-xs md:text-sm tracking-widest uppercase font-mono bg-yellow-900/20 px-2 py-0.5 rounded border border-yellow-900/50 flex items-center">🥇 {stars} Vàng</span>
+              <span className="text-gray-300 text-xs md:text-sm tracking-widest uppercase font-mono bg-gray-800/40 px-2 py-0.5 rounded border border-gray-600/50 flex items-center">🥈 {silverStars} Bạc</span>
+              <span className="text-red-500 text-xs md:text-sm tracking-widest uppercase font-mono bg-red-900/20 px-2 py-0.5 rounded border border-red-900/50 flex items-center">❌ {failedDays} Nợ</span>
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
@@ -851,7 +917,7 @@ export default function AptisIntensivePage() {
 
                     <div className="absolute left-0 right-0 bottom-0 p-4 bg-gradient-to-t from-black via-black/95 to-transparent flex justify-center pb-6">
                       <button
-                        onClick={() => { setPlanStep(0); setIsPlanning(false); }}
+                        onClick={handleSleepConfirmation}
                         className="w-full max-w-sm bg-blue-600 outline outline-4 outline-blue-900/30 text-white rounded-xl py-4 font-bold text-lg shadow-[0_0_40px_rgba(59,130,246,0.5)] hover:bg-blue-500 hover:-translate-y-1 transition-all"
                       >
                         Xác nhận & Đi Ngủ

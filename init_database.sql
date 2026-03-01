@@ -8,8 +8,14 @@ CREATE TABLE public.user_state (
   time_left INT DEFAULT 0,
   is_active BOOLEAN DEFAULT false,
   is_paused_day BOOLEAN DEFAULT false,
+  stars INT DEFAULT 0,
+  failed_days INT DEFAULT 0,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
+
+-- Dành cho Update (Nếu đã tạo bảng trước đó, hãy chạy riêng 2 dòng này)
+-- ALTER TABLE public.user_state ADD COLUMN stars INT DEFAULT 0;
+-- ALTER TABLE public.user_state ADD COLUMN failed_days INT DEFAULT 0;
 
 -- Bật bảo mật RLS
 ALTER TABLE public.user_state ENABLE ROW LEVEL SECURITY;
