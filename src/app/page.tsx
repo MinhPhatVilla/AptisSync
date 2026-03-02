@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Play, Pause, CheckCircle, ChevronRight, MoonStar, Clock, BellRing, LogOut, Loader2, RefreshCw } from "lucide-react";
+import { Play, Pause, CheckCircle, ChevronRight, MoonStar, Clock, BellRing, LogOut, Loader2, RefreshCw, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
 import { User, Session } from "@supabase/supabase-js";
@@ -39,6 +39,8 @@ export default function AptisIntensivePage() {
   const [password, setPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const [isPausedDay, setIsPausedDay] = useState(false);
+
+  const endTimeRef = useRef<number | null>(null);
 
   // Voice Settings
   const [viVoices, setViVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -426,11 +428,16 @@ export default function AptisIntensivePage() {
     let interval: NodeJS.Timeout | null = null;
 
     if (isActive && timeLeft > 0) {
+      if (!endTimeRef.current) {
+        endTimeRef.current = Date.now() + timeLeft * 1000;
+      }
       interval = setInterval(() => {
-        setTimeLeft((time) => time - 1);
-      }, 1000);
+        const remaining = Math.max(0, Math.ceil((endTimeRef.current! - Date.now()) / 1000));
+        setTimeLeft(remaining);
+      }, 500);
     } else if (isActive && timeLeft === 0) {
       // Block finished
+      endTimeRef.current = null;
       setIsActive(false);
 
       // Announce with Speech Synthesis
@@ -494,6 +501,10 @@ export default function AptisIntensivePage() {
     let remainingRealMins = bedTotal - currTotal;
     let newSchedule: ScheduleItem[] = [];
 
+    let updatedBlocks = [...blocks];
+    let newActiveIndex = activeBlockIndex;
+    let newTimeLeft = timeLeft;
+
     if (remainingRealMins > remainingAptisMins) {
       let totalBreakMins = remainingRealMins - remainingAptisMins;
       let numBreaks = blocks.length - activeBlockIndex;
@@ -516,22 +527,61 @@ export default function AptisIntensivePage() {
         newSchedule.push({ time: `${ft(currH, currM)} - ${ft(bedH, bedM)}`, title: "Thư giãn tự do", desc: "Xả hơi bù", type: "rest" });
       }
     } else {
-      // Not enough time, crunch them
+      // Not enough time, crunch them and drop if necessary
+      let availableMins = remainingRealMins;
+      let droppedBlocksCount = 0;
+
       for (let i = activeBlockIndex; i < blocks.length; i++) {
         let bDuration = (i === activeBlockIndex) ? Math.ceil(timeLeft / 60) : blocks[i].durationMins;
-        newSchedule.push({ time: `${ft(currH, currM)} - ${ft(currH, currM + bDuration)}`, title: `Ép tiến độ: ${blocks[i].title}`, desc: "Chạy đua thời gian", type: "urgent" });
-        [currH, currM] = addMins(currH, currM, bDuration);
-        if (i < blocks.length - 1) {
-          newSchedule.push({ time: `${ft(currH, currM)} - ${ft(currH, currM + 5)}`, title: "Giải lao nhanh", desc: "5 phút", type: "rest" });
-          [currH, currM] = addMins(currH, currM, 5);
+
+        if (availableMins - bDuration >= 0) {
+          newSchedule.push({ time: `${ft(currH, currM)} - ${ft(currH, currM + bDuration)}`, title: `Ép tiến độ: ${blocks[i].title}`, desc: "Chạy đua thời gian", type: "urgent" });
+          [currH, currM] = addMins(currH, currM, bDuration);
+          availableMins -= bDuration;
+
+          if (i < blocks.length - 1 && availableMins >= 5) {
+            newSchedule.push({ time: `${ft(currH, currM)} - ${ft(currH, currM + 5)}`, title: "Giải lao nhanh", desc: "5 phút", type: "rest" });
+            [currH, currM] = addMins(currH, currM, 5);
+            availableMins -= 5;
+          }
+        } else {
+          // Drop block
+          droppedBlocksCount++;
+          updatedBlocks[i].completed = true;
+        }
+      }
+
+      if (droppedBlocksCount > 0) {
+        speakAnnounce(`Vì thời gian đã trễ, hệ thống tự động loại bỏ ${droppedBlocksCount} chu kỳ học tiếp theo để ép anh đi ngủ đúng giờ, tuyệt đối đảm bảo sức khỏe.`);
+        setBlocks(updatedBlocks);
+
+        while (newActiveIndex < updatedBlocks.length && updatedBlocks[newActiveIndex].completed) {
+          newActiveIndex++;
+        }
+        if (newActiveIndex !== activeBlockIndex) {
+          setActiveBlockIndex(newActiveIndex);
+          if (newActiveIndex < updatedBlocks.length) {
+            newTimeLeft = updatedBlocks[newActiveIndex].durationMins * 60;
+            setTimeLeft(newTimeLeft);
+          } else {
+            newTimeLeft = 0;
+            setIsActive(false);
+          }
         }
       }
     }
 
-    newSchedule.push({ time: `${ft(bedH, bedM)} - Sáng mai`, title: "Vệ sinh cá nhân, Night Plan & Ngủ sâu", desc: "Lên giường thao thức", type: "rest" });
+    newSchedule.push({ time: `${ft(bedH, bedM)} - Sáng mai`, title: "Vệ sinh cá nhân, Night Plan & Ngủ sâu", desc: "Lên giường ngủ nghỉ đúng giờ", type: "rest" });
 
     setGeneratedSchedule(newSchedule);
-    syncAndBroadcast({ isActive: true, isPausedDay: false, timeLeft, schedule: newSchedule });
+    syncAndBroadcast({
+      blocks: updatedBlocks,
+      activeBlockIndex: newActiveIndex,
+      isActive: newActiveIndex < updatedBlocks.length,
+      isPausedDay: false,
+      timeLeft: newTimeLeft,
+      schedule: newSchedule
+    });
   };
 
 
@@ -559,6 +609,7 @@ export default function AptisIntensivePage() {
     if (activeBlockIndex >= blocks.length || isPausedDay) return; // All done
     const newIsActive = !isActive;
     setIsActive(newIsActive);
+    if (!newIsActive) endTimeRef.current = null;
     syncAndBroadcast({ isActive: newIsActive, timeLeft });
   };
 
@@ -664,8 +715,18 @@ export default function AptisIntensivePage() {
           </button>
 
           <button
-            onClick={() => setIsPlanning(true)}
-            className="bg-blue-950/40 text-blue-400 p-3.5 rounded-xl hover:bg-blue-900/60 border border-blue-900/50 hover:border-blue-500 hover:shadow-[0_0_15px_rgba(59,130,246,0.3)] transition-all"
+            onClick={() => {
+              const hour = currentDateTime?.getHours() || 0;
+              if (hour >= 21 || hour < 4) {
+                setIsPlanning(true);
+              } else {
+                speakAnnounce("App chỉ cho phép lập Night Plan vào buổi tối từ 21 giờ, hoặc rạng sáng hệ thống nhé.");
+              }
+            }}
+            className={`p-3.5 rounded-xl border transition-all ${(currentDateTime && (currentDateTime.getHours() >= 21 || currentDateTime.getHours() < 4))
+                ? "bg-blue-950/40 text-blue-400 border-blue-900/50 hover:bg-blue-900/60 hover:border-blue-500 hover:shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+                : "bg-gray-900/40 text-gray-500 border-gray-800/50 cursor-pointer"
+              }`}
             title="5-Min Night Plan"
           >
             <MoonStar className="w-5 h-5 md:w-5 md:h-5" />
@@ -765,6 +826,7 @@ export default function AptisIntensivePage() {
                 <button
                   onClick={() => {
                     setIsActive(false); setIsPausedDay(true);
+                    endTimeRef.current = null;
                     speakAnnounce("Hệ thống đã tạm dừng. Bạn cứ an tâm đi giải quyết việc đột xuất nhé.");
                     syncAndBroadcast({ isActive: false, isPausedDay: true, timeLeft });
                   }}
@@ -813,6 +875,13 @@ export default function AptisIntensivePage() {
             className="fixed inset-0 z-[100] bg-black/98 backdrop-blur-xl"
           >
             <div className="flex-1 flex flex-col max-w-lg mx-auto w-full h-full relative pt-12 pb-10 px-4 md:px-0">
+              <button
+                onClick={() => { setIsPlanning(false); setPlanStep(0); }}
+                className="absolute top-8 left-4 md:top-12 md:-left-4 z-[110] p-2 bg-gray-900/60 rounded-full text-gray-400 hover:text-white hover:bg-red-900/80 transition-colors"
+                title="Đóng Kế Hoạch"
+              >
+                <X className="w-5 h-5 md:w-6 md:h-6" />
+              </button>
               <p className="text-blue-500 font-mono text-sm tracking-widest uppercase mb-4 opacity-80 pl-2">
                 Lên Lịch • Câu {planStep + 1}/3
               </p>
