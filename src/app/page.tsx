@@ -724,8 +724,8 @@ export default function AptisIntensivePage() {
               }
             }}
             className={`p-3.5 rounded-xl border transition-all ${(currentDateTime && (currentDateTime.getHours() >= 21 || currentDateTime.getHours() < 4))
-                ? "bg-blue-950/40 text-blue-400 border-blue-900/50 hover:bg-blue-900/60 hover:border-blue-500 hover:shadow-[0_0_15px_rgba(59,130,246,0.3)]"
-                : "bg-gray-900/40 text-gray-500 border-gray-800/50 cursor-pointer"
+              ? "bg-blue-950/40 text-blue-400 border-blue-900/50 hover:bg-blue-900/60 hover:border-blue-500 hover:shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+              : "bg-gray-900/40 text-gray-500 border-gray-800/50 cursor-pointer"
               }`}
             title="5-Min Night Plan"
           >
@@ -743,8 +743,8 @@ export default function AptisIntensivePage() {
       </div>
 
       {/* Main Circular Progress & Timer */}
-      <div className="flex-1 flex flex-col items-center justify-center -mt-6">
-        <div className="relative w-72 h-72 sm:w-80 sm:h-80 md:w-96 md:h-96 flex flex-col items-center justify-center drop-shadow-[0_0_30px_rgba(59,130,246,0.15)]">
+      <div className="flex-1 flex flex-col items-center justify-start overflow-y-auto pb-10 w-full [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-blue-900">
+        <div className="relative w-72 h-72 sm:w-80 sm:h-80 md:w-96 md:h-96 flex flex-col items-center justify-center shrink-0 drop-shadow-[0_0_30px_rgba(59,130,246,0.15)] mt-4">
 
           {/* SVG Progress Circle */}
           <svg className="absolute inset-0 w-full h-full -rotate-90">
@@ -846,22 +846,74 @@ export default function AptisIntensivePage() {
           )}
         </div>
 
-        {/* Mini block list under */}
-        <div className="mt-12 w-full max-w-[320px] space-y-3">
-          {blocks.map((block, idx) => (
-            <div
-              key={block.id}
-              className={`flex justify-between items-center text-sm md:text-base px-5 py-3.5 rounded-xl border transition-all duration-500 ${block.completed
-                ? "border-blue-900/30 bg-blue-950/10 text-blue-500/50 line-through"
-                : idx === activeBlockIndex
-                  ? "border-blue-500/50 bg-blue-900/20 text-blue-100 font-medium shadow-[0_0_10px_rgba(59,130,246,0.1)]"
-                  : "border-gray-800/50 text-gray-500"
-                }`}
-            >
-              <span className="tracking-wide">{block.title}</span>
-              <span className="font-mono text-xs md:text-sm opacity-80">{block.durationMins}m</span>
-            </div>
-          ))}
+        {/* Schedule / Mini block list under */}
+        <div className="mt-12 w-full max-w-[360px] space-y-4 px-4">
+          {(() => {
+            let listToRender = generatedSchedule as any[];
+
+            // Generate fallback dynamic timeline if no schedule exists
+            if (listToRender.length === 0) {
+              const schedule: any[] = [];
+              const now = currentDateTime || new Date();
+              let currH = now.getHours();
+              let currM = now.getMinutes();
+              const ft = (hr: number, mn: number) => {
+                let dHr = hr; let dMn = mn;
+                if (dMn >= 60) { dHr += Math.floor(dMn / 60); dMn %= 60; }
+                if (dHr >= 24) dHr %= 24;
+                return `${String(dHr).padStart(2, '0')}:${String(dMn).padStart(2, '0')}`;
+              };
+              const addMins = (hr: number, mn: number, minsToAdd: number) => {
+                return [hr + Math.floor((mn + minsToAdd) / 60), (mn + minsToAdd) % 60];
+              };
+
+              blocks.forEach((block, i) => {
+                if (block.completed) {
+                  schedule.push({ time: "Hoàn thành", title: block.title, desc: `${block.durationMins} phút • Đã xong`, type: "completed", completed: true });
+                } else {
+                  let bDuration = (i === activeBlockIndex && timeLeft > 0) ? Math.ceil(timeLeft / 60) : block.durationMins;
+                  let tStart = `${ft(currH, currM)}`;
+                  [currH, currM] = addMins(currH, currM, bDuration);
+                  let tEnd = `${ft(currH, currM)}`;
+                  schedule.push({
+                    time: `${tStart} - ${tEnd}`,
+                    title: block.title,
+                    desc: i === activeBlockIndex ? (isActive ? "Đang chạy..." : "Sắp tới lượt") : `Ước tính ${bDuration} phút`,
+                    type: "aptis",
+                    isActive: i === activeBlockIndex
+                  });
+                }
+              });
+              listToRender = schedule;
+            }
+
+            return listToRender.map((item, i) => (
+              <div key={i} className={`flex flex-col mb-1 group hover:-translate-y-1 transition-transform ${item.completed ? 'opacity-60 saturate-50' : ''}`}>
+                <div className="flex items-center mb-1">
+                  <span className={`w-2.5 h-2.5 rounded-full mr-2 shadow-[0_0_8px_rgba(37,99,235,0.8)] ${item.completed ? 'bg-gray-500 shadow-none' : (item.isActive ? 'bg-blue-400 animate-pulse' : 'bg-blue-600')}`}></span>
+                  <span className={`font-mono text-sm font-bold tracking-wider opacity-90 ${item.completed ? 'text-gray-400' : 'text-blue-300'}`}>
+                    {item.time}
+                  </span>
+                </div>
+                <div className={`ml-3.5 pl-4 border-l-2 py-2 ${item.type === 'aptis' ? 'border-blue-500/50' :
+                  item.type === 'school' ? 'border-purple-500/50' :
+                    item.type === 'urgent' ? 'border-red-500/50' :
+                      item.completed ? 'border-gray-700/50' : 'border-gray-800'
+                  }`}
+                >
+                  <div className={`p-3.5 rounded-xl border backdrop-blur-sm ${item.type === 'aptis' ? (item.isActive ? 'bg-blue-800/30 border-blue-400/50 text-blue-50 shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'bg-blue-900/20 border-blue-500/30 text-blue-100 shadow-[0_0_15px_rgba(59,130,246,0.1)]') :
+                    item.type === 'school' ? 'bg-purple-900/10 border-purple-500/20 text-purple-200' :
+                      item.type === 'urgent' ? 'bg-red-900/10 border-red-500/20 text-red-200 shadow-[0_0_15px_rgba(239,68,68,0.1)]' :
+                        item.completed ? 'bg-gray-900/30 border-gray-800/50 text-gray-400 line-through' : 'bg-transparent border-gray-800 text-gray-400'
+                    }`}
+                  >
+                    <h4 className="font-bold text-sm md:text-base tracking-wide">{item.title}</h4>
+                    {item.desc && <p className="text-xs mt-1.5 opacity-80 font-mono">{item.desc}</p>}
+                  </div>
+                </div>
+              </div>
+            ));
+          })()}
         </div>
       </div>
 
