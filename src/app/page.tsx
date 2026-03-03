@@ -847,16 +847,36 @@ export default function AptisIntensivePage() {
         </div>
 
         {/* Schedule / Mini block list under */}
-        <div className="mt-12 w-full max-w-[360px] space-y-4 px-4">
+        <div className="mt-12 w-full max-w-[360px] space-y-4 px-4 pb-12">
           {(() => {
             let listToRender = generatedSchedule as any[];
+            const now = currentDateTime || new Date();
+            let currH = now.getHours();
+            let currM = now.getMinutes();
+            const currentTotal = currH * 60 + currM;
 
-            // Generate fallback dynamic timeline if no schedule exists
-            if (listToRender.length === 0) {
+            if (listToRender.length > 0) {
+              // Filter out past items from the generated plan
+              listToRender = listToRender.filter(item => {
+                const matchAptis = blocks.find(b => item.title.includes(b.title));
+                if (matchAptis) return !matchAptis.completed;
+
+                const parts = item.time.split(" - ");
+                if (parts.length < 2) return true;
+                if (parts[1].includes("Sáng mai") || parts[1].toLowerCase().includes("hoàn thành")) return true;
+
+                const endStr = parts[1].trim();
+                const [endH, endM] = endStr.split(":").map(Number);
+                if (isNaN(endH) || isNaN(endM)) return true;
+
+                let endTotal = endH * 60 + endM;
+                if (endTotal < 12 * 60 && currentTotal >= 12 * 60) endTotal += 24 * 60;
+
+                return currentTotal <= endTotal;
+              });
+            } else {
+              // Generate fallback dynamic timeline if no schedule exists
               const schedule: any[] = [];
-              const now = currentDateTime || new Date();
-              let currH = now.getHours();
-              let currM = now.getMinutes();
               const ft = (hr: number, mn: number) => {
                 let dHr = hr; let dMn = mn;
                 if (dMn >= 60) { dHr += Math.floor(dMn / 60); dMn %= 60; }
