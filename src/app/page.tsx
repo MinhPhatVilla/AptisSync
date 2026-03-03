@@ -551,6 +551,11 @@ export default function AptisIntensivePage() {
         }
       }
 
+      let cTot = currH * 60 + currM;
+      if (cTot < bedTotal && bedTotal - cTot <= 24 * 60) {
+        newSchedule.push({ time: `${ft(currH, currM)} - ${ft(bedH, bedM)}`, title: "Thư giãn tự do", desc: `Xả hơi ${bedTotal - cTot} phút lẻ còn lại`, type: "rest" });
+      }
+
       if (droppedBlocksCount > 0) {
         speakAnnounce(`Vì thời gian đã trễ, hệ thống tự động loại bỏ ${droppedBlocksCount} chu kỳ học tiếp theo để ép anh đi ngủ đúng giờ, tuyệt đối đảm bảo sức khỏe.`);
         setBlocks(updatedBlocks);
