@@ -603,22 +603,27 @@ export default function AptisIntensivePage() {
       let totalBreakMins = remainingRealMins - remainingAptisMins;
       let numBreaks = blocks.length - activeBlockIndex;
       let breakPerBlock = numBreaks > 0 ? Math.floor(totalBreakMins / numBreaks) : 0;
-      if (breakPerBlock > 45) breakPerBlock = 45;
+      // Giới hạn break tối đa 20 phút (theo nghiên cứu Ultradian Rhythm)
+      // Nghỉ quá lâu gây mất đà tập trung, tối thiểu 5 phút để não kịp hồi phục
+      if (breakPerBlock > 20) breakPerBlock = 20;
+      if (breakPerBlock < 5 && totalBreakMins >= 5) breakPerBlock = 5;
 
       for (let i = activeBlockIndex; i < blocks.length; i++) {
         let bDuration = (i === activeBlockIndex) ? Math.ceil(timeLeft / 60) : blocks[i].durationMins;
         newSchedule.push({ time: `${ft(currH, currM)} - ${ft(currH, currM + bDuration)}`, title: `Tiếp Tục: ${blocks[i].title}`, desc: "Khối thời gian linh hoạt", type: "aptis" });
         [currH, currM] = addMins(currH, currM, bDuration);
 
-        if (i < blocks.length - 1 || breakPerBlock > 0) {
-          newSchedule.push({ time: `${ft(currH, currM)} - ${ft(currH, currM + breakPerBlock)}`, title: "Nghỉ giải lao (Auto)", desc: `Dãn cách ${breakPerBlock} phút trải đều lịch`, type: "rest" });
+        // Chỉ thêm break GIỮA các block, KHÔNG thêm sau block cuối cùng
+        if (i < blocks.length - 1 && breakPerBlock > 0) {
+          newSchedule.push({ time: `${ft(currH, currM)} - ${ft(currH, currM + breakPerBlock)}`, title: "Nghỉ giải lao", desc: `Dãn cách ${breakPerBlock} phút • Đi lại, uống nước, không nhìn màn hình`, type: "rest" });
           [currH, currM] = addMins(currH, currM, breakPerBlock);
         }
       }
 
       let cTot = currH * 60 + currM;
       if (cTot < bedTotal && bedTotal - cTot <= 24 * 60) {
-        newSchedule.push({ time: `${ft(currH, currM)} - ${ft(bedH, bedM)}`, title: "Thư giãn tự do", desc: "Xả hơi bù", type: "rest" });
+        const freeTimeMins = bedTotal - cTot;
+        newSchedule.push({ time: `${ft(currH, currM)} - ${ft(bedH, bedM)}`, title: "Thư giãn tự do", desc: `Xả hơi ${freeTimeMins} phút • Đọc sách, nghe nhạc, không học`, type: "rest" });
       }
     } else {
       // Not enough time, crunch them and drop if necessary
@@ -647,7 +652,8 @@ export default function AptisIntensivePage() {
 
       let cTot = currH * 60 + currM;
       if (cTot < bedTotal && bedTotal - cTot <= 24 * 60) {
-        newSchedule.push({ time: `${ft(currH, currM)} - ${ft(bedH, bedM)}`, title: "Thư giãn tự do", desc: `Xả hơi ${bedTotal - cTot} phút lẻ còn lại`, type: "rest" });
+        const freeTimeMins = bedTotal - cTot;
+        newSchedule.push({ time: `${ft(currH, currM)} - ${ft(bedH, bedM)}`, title: "Thư giãn tự do", desc: `Nghỉ ngơi ${freeTimeMins} phút • Chuẩn bị cho giấc ngủ`, type: "rest" });
       }
 
       if (droppedBlocksCount > 0) {
@@ -774,80 +780,78 @@ export default function AptisIntensivePage() {
         </div>
       )}
 
-      {/* Header Info */}
-      <div className="flex justify-between items-center mb-8 pt-8">
-        <div>
-          <p className="text-[10px] uppercase font-mono tracking-[0.3em] text-blue-500/80 mb-1.5 flex gap-3">
-            <span>Powered by MINH PHÁT VILLA</span>
-          </p>
-          <div className="flex items-center">
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white uppercase flex items-center">
-              Aptis Intensive <span className="ml-3 w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)] animate-pulse"></span>
+      {/* Header Info - Mobile Optimized */}
+      <div className="mb-6 pt-8">
+        {/* Row 1: Title + Action Buttons */}
+        <div className="flex justify-between items-start">
+          <div className="flex-1 min-w-0">
+            <p className="text-[9px] md:text-[10px] uppercase font-mono tracking-[0.3em] text-blue-500/80 mb-1">
+              Powered by MINH PHÁT VILLA
+            </p>
+            <h1 className="text-xl md:text-3xl font-bold tracking-tight text-white uppercase flex items-center">
+              Aptis Intensive <span className="ml-2 w-2 h-2 md:w-2.5 md:h-2.5 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)] animate-pulse"></span>
             </h1>
           </div>
-          <div className="flex gap-4 mt-2">
-            <p className="text-blue-500/70 text-xs md:text-sm tracking-widest uppercase font-mono bg-blue-900/20 px-2 py-0.5 rounded border border-blue-900/50">Countdown: 21 Days</p>
-            <div className="flex gap-2">
-              <span className="text-yellow-500 text-xs md:text-sm tracking-widest uppercase font-mono bg-yellow-900/20 px-2 py-0.5 rounded border border-yellow-900/50 flex items-center">🥇 {stars} Vàng</span>
-              <span className="text-gray-300 text-xs md:text-sm tracking-widest uppercase font-mono bg-gray-800/40 px-2 py-0.5 rounded border border-gray-600/50 flex items-center">🥈 {silverStars} Bạc</span>
-              <span className="text-red-500 text-xs md:text-sm tracking-widest uppercase font-mono bg-red-900/20 px-2 py-0.5 rounded border border-red-900/50 flex items-center">❌ {failedDays} Nợ</span>
-            </div>
+
+          {/* Action Buttons - Always Visible */}
+          <div className="flex items-center gap-2 md:gap-3 shrink-0 ml-2">
+            <button
+              onClick={() => {
+                if (viVoices.length > 0) {
+                  const nextIdx = (selectedVoiceIndex + 1) % viVoices.length;
+                  setSelectedVoiceIndex(nextIdx);
+
+                  const tester = new SpeechSynthesisUtterance();
+                  tester.text = `Đã đổi sang giọng ${viVoices[nextIdx].name}`;
+                  tester.lang = 'vi-VN';
+                  tester.rate = 1.0; tester.pitch = 1.25;
+                  tester.voice = viVoices[nextIdx];
+                  window.speechSynthesis.cancel();
+                  window.speechSynthesis.speak(tester);
+                } else {
+                  speakAnnounce("Chưa nạp thành công giọng nói Tiếng Việt.");
+                }
+              }}
+              className="bg-blue-950/40 text-blue-400 p-2.5 md:p-3.5 rounded-xl hover:bg-blue-900/60 border border-blue-900/50 hover:border-blue-500 hover:shadow-[0_0_15px_rgba(59,130,246,0.4)] transition-all"
+              title="Đổi giọng nói (Test Audio)"
+            >
+              <BellRing className="w-4 h-4 md:w-5 md:h-5" />
+            </button>
+
+            <button
+              onClick={() => {
+                const hour = currentDateTime?.getHours() || 0;
+                if (hour >= 21 || hour < 4) {
+                  setIsPlanning(true);
+                } else {
+                  speakAnnounce("App chỉ cho phép lập Night Plan vào buổi tối từ 21 giờ, hoặc rạng sáng hệ thống nhé.");
+                }
+              }}
+              className={`p-2.5 md:p-3.5 rounded-xl border transition-all ${(currentDateTime && (currentDateTime.getHours() >= 21 || currentDateTime.getHours() < 4))
+                ? "bg-blue-950/40 text-blue-400 border-blue-900/50 hover:bg-blue-900/60 hover:border-blue-500 hover:shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+                : "bg-gray-900/40 text-gray-500 border-gray-800/50 cursor-pointer"
+                }`}
+              title="5-Min Night Plan"
+            >
+              <MoonStar className="w-4 h-4 md:w-5 md:h-5" />
+            </button>
+
+            <button
+              onClick={() => supabase.auth.signOut()}
+              className="bg-red-950/40 text-red-400 p-2.5 md:p-3.5 rounded-xl hover:bg-red-900/60 border border-red-900/50 hover:border-red-500 transition-all opacity-70 hover:opacity-100"
+              title="Đăng Xuất"
+            >
+              <LogOut className="w-4 h-4 md:w-5 md:h-5" />
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="hidden md:block mr-4 text-right">
-            <p className="text-[10px] uppercase font-mono tracking-[0.2em] text-blue-500/50">Powered by</p>
-            <p className="text-xs font-bold tracking-widest text-blue-300/80">MINH PHÁT VILLA</p>
-          </div>
-          <button
-            onClick={() => {
-              if (viVoices.length > 0) {
-                const nextIdx = (selectedVoiceIndex + 1) % viVoices.length;
-                setSelectedVoiceIndex(nextIdx);
-
-                const tester = new SpeechSynthesisUtterance();
-                tester.text = `Đã đổi sang giọng ${viVoices[nextIdx].name}`;
-                tester.lang = 'vi-VN';
-                tester.rate = 1.0; tester.pitch = 1.25;
-                tester.voice = viVoices[nextIdx];
-                window.speechSynthesis.cancel();
-                window.speechSynthesis.speak(tester);
-              } else {
-                speakAnnounce("Chưa nạp thành công giọng nói Tiếng Việt.");
-              }
-            }}
-            className="bg-blue-950/40 text-blue-400 p-3.5 rounded-xl hover:bg-blue-900/60 border border-blue-900/50 hover:border-blue-500 hover:shadow-[0_0_15px_rgba(59,130,246,0.4)] transition-all"
-            title="Đổi giọng nói (Test Audio)"
-          >
-            <BellRing className="w-5 h-5 md:w-5 md:h-5" />
-          </button>
-
-          <button
-            onClick={() => {
-              const hour = currentDateTime?.getHours() || 0;
-              if (hour >= 21 || hour < 4) {
-                setIsPlanning(true);
-              } else {
-                speakAnnounce("App chỉ cho phép lập Night Plan vào buổi tối từ 21 giờ, hoặc rạng sáng hệ thống nhé.");
-              }
-            }}
-            className={`p-3.5 rounded-xl border transition-all ${(currentDateTime && (currentDateTime.getHours() >= 21 || currentDateTime.getHours() < 4))
-              ? "bg-blue-950/40 text-blue-400 border-blue-900/50 hover:bg-blue-900/60 hover:border-blue-500 hover:shadow-[0_0_15px_rgba(59,130,246,0.3)]"
-              : "bg-gray-900/40 text-gray-500 border-gray-800/50 cursor-pointer"
-              }`}
-            title="5-Min Night Plan"
-          >
-            <MoonStar className="w-5 h-5 md:w-5 md:h-5" />
-          </button>
-
-          <button
-            onClick={() => supabase.auth.signOut()}
-            className="bg-red-950/40 text-red-400 p-3.5 rounded-xl hover:bg-red-900/60 border border-red-900/50 hover:border-red-500 transition-all opacity-70 hover:opacity-100"
-            title="Đăng Xuất"
-          >
-            <LogOut className="w-5 h-5 md:w-5 md:h-5" />
-          </button>
+        {/* Row 2: Stats Badges */}
+        <div className="flex items-center gap-2 mt-3 flex-wrap">
+          <p className="text-blue-500/70 text-[10px] md:text-xs tracking-widest uppercase font-mono bg-blue-900/20 px-2 py-0.5 rounded border border-blue-900/50">Countdown: 21 Days</p>
+          <span className="text-yellow-500 text-[10px] md:text-xs tracking-widest uppercase font-mono bg-yellow-900/20 px-1.5 py-0.5 rounded border border-yellow-900/50 flex items-center">🥇 {stars} Vàng</span>
+          <span className="text-gray-300 text-[10px] md:text-xs tracking-widest uppercase font-mono bg-gray-800/40 px-1.5 py-0.5 rounded border border-gray-600/50 flex items-center">🥈 {silverStars} Bạc</span>
+          <span className="text-red-500 text-[10px] md:text-xs tracking-widest uppercase font-mono bg-red-900/20 px-1.5 py-0.5 rounded border border-red-900/50 flex items-center">❌ {failedDays} Nợ</span>
         </div>
       </div>
 
@@ -965,24 +969,44 @@ export default function AptisIntensivePage() {
             const currentTotal = currH * 60 + currM;
 
             if (listToRender.length > 0) {
-              // Filter out past items from the generated plan
-              listToRender = listToRender.filter(item => {
-                const matchAptis = blocks.find(b => item.title.includes(b.title));
-                if (matchAptis) return !matchAptis.completed;
+              // Phát hiện schedule cho ngày mai (Night Plan tạo lúc đêm nay)
+              // Nếu schedule bắt đầu từ buổi sáng mà giờ hiện tại là buổi tối → đây là lịch cho ngày mai
+              const firstTime = listToRender[0]?.time?.split(" - ")[0];
+              let isNextDaySchedule = false;
+              if (firstTime) {
+                const [fH] = firstTime.split(":").map(Number);
+                if (!isNaN(fH) && fH < 12 && currentTotal >= 20 * 60) {
+                  isNextDaySchedule = true;
+                }
+              }
 
-                const parts = item.time.split(" - ");
-                if (parts.length < 2) return true;
-                if (parts[1].includes("Sáng mai") || parts[1].toLowerCase().includes("hoàn thành")) return true;
+              if (isNextDaySchedule) {
+                // Lịch cho ngày mai: chỉ lọc theo trạng thái hoàn thành của block, KHÔNG lọc theo giờ
+                listToRender = listToRender.filter(item => {
+                  const matchAptis = blocks.find(b => item.title.includes(b.title));
+                  if (matchAptis) return !matchAptis.completed;
+                  return true;
+                });
+              } else {
+                // Lịch hôm nay: lọc bình thường theo giờ + block
+                listToRender = listToRender.filter(item => {
+                  const matchAptis = blocks.find(b => item.title.includes(b.title));
+                  if (matchAptis) return !matchAptis.completed;
 
-                const endStr = parts[1].trim();
-                const [endH, endM] = endStr.split(":").map(Number);
-                if (isNaN(endH) || isNaN(endM)) return true;
+                  const parts = item.time.split(" - ");
+                  if (parts.length < 2) return true;
+                  if (parts[1].includes("Sáng mai") || parts[1].toLowerCase().includes("hoàn thành")) return true;
 
-                let endTotal = endH * 60 + endM;
-                if (endTotal < 12 * 60 && currentTotal >= 12 * 60) endTotal += 24 * 60;
+                  const endStr = parts[1].trim();
+                  const [endH, endM] = endStr.split(":").map(Number);
+                  if (isNaN(endH) || isNaN(endM)) return true;
 
-                return currentTotal <= endTotal;
-              });
+                  let endTotal = endH * 60 + endM;
+                  if (endTotal < 12 * 60 && currentTotal >= 12 * 60) endTotal += 24 * 60;
+
+                  return currentTotal <= endTotal;
+                });
+              }
             } else {
               // Generate fallback dynamic timeline if no schedule exists
               const schedule: any[] = [];
