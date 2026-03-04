@@ -1020,23 +1020,89 @@ export default function AptisIntensivePage() {
                 return [hr + Math.floor((mn + minsToAdd) / 60), (mn + minsToAdd) % 60];
               };
 
+              // Giờ ngủ mặc định: 23:45
+              const bedH = 23, bedM = 45;
+              let bedTotal = bedH * 60 + bedM;
+              let startTotal = currH * 60 + currM;
+              // Xử lý trường hợp qua nửa đêm
+              if (bedTotal < startTotal && bedTotal < 12 * 60) bedTotal += 24 * 60;
+              let remainingMins = bedTotal - startTotal;
+
+              let droppedCount = 0;
+
               blocks.forEach((block, i) => {
                 if (block.completed) {
                   schedule.push({ time: "Hoàn thành", title: block.title, desc: `${block.durationMins} phút • Đã xong`, type: "completed", completed: true });
                 } else {
                   let bDuration = (i === activeBlockIndex && timeLeft > 0) ? Math.ceil(timeLeft / 60) : block.durationMins;
-                  let tStart = `${ft(currH, currM)}`;
-                  [currH, currM] = addMins(currH, currM, bDuration);
-                  let tEnd = `${ft(currH, currM)}`;
-                  schedule.push({
-                    time: `${tStart} - ${tEnd}`,
-                    title: block.title,
-                    desc: i === activeBlockIndex ? (isActive ? "Đang chạy..." : "Sắp tới lượt") : `Ước tính ${bDuration} phút`,
-                    type: "aptis",
-                    isActive: i === activeBlockIndex
-                  });
+                  const breakMins = (i > activeBlockIndex && schedule.length > 0 && !schedule[schedule.length - 1]?.completed) ? 10 : 0;
+
+                  if (i === activeBlockIndex) {
+                    // Block đang chạy: LUÔN hiển thị
+                    let tStart = `${ft(currH, currM)}`;
+                    [currH, currM] = addMins(currH, currM, bDuration);
+                    let tEnd = `${ft(currH, currM)}`;
+                    remainingMins -= bDuration;
+                    schedule.push({
+                      time: `${tStart} - ${tEnd}`,
+                      title: block.title,
+                      desc: isActive ? "Đang chạy..." : "Sắp tới lượt",
+                      type: "aptis",
+                      isActive: true
+                    });
+                  } else if (remainingMins >= bDuration + breakMins) {
+                    // Còn đủ thời gian: thêm break + block
+                    if (breakMins > 0) {
+                      schedule.push({
+                        time: `${ft(currH, currM)} - ${ft(currH, currM + breakMins)}`,
+                        title: "Nghỉ giải lao",
+                        desc: `${breakMins} phút • Đi lại, uống nước`,
+                        type: "rest"
+                      });
+                      [currH, currM] = addMins(currH, currM, breakMins);
+                      remainingMins -= breakMins;
+                    }
+                    let tStart = `${ft(currH, currM)}`;
+                    [currH, currM] = addMins(currH, currM, bDuration);
+                    let tEnd = `${ft(currH, currM)}`;
+                    remainingMins -= bDuration;
+                    schedule.push({
+                      time: `${tStart} - ${tEnd}`,
+                      title: block.title,
+                      desc: `Ước tính ${bDuration} phút`,
+                      type: "aptis"
+                    });
+                  } else {
+                    // Không đủ thời gian: DROP block
+                    droppedCount++;
+                    schedule.push({
+                      time: "Bỏ qua",
+                      title: block.title,
+                      desc: `Không đủ thời gian trước giờ ngủ (${ft(bedH, bedM)})`,
+                      type: "completed",
+                      completed: true
+                    });
+                  }
                 }
               });
+
+              // Thêm block đi ngủ nếu còn thời gian
+              if (remainingMins > 0) {
+                schedule.push({
+                  time: `${ft(currH, currM)} - ${ft(bedH, bedM)}`,
+                  title: remainingMins > 30 ? "Thư giãn & Chuẩn bị đi ngủ" : "Vệ sinh cá nhân & Đi ngủ",
+                  desc: `${remainingMins} phút còn lại`,
+                  type: "rest"
+                });
+              }
+
+              schedule.push({
+                time: `${ft(bedH, bedM)} - Sáng mai`,
+                title: "Ngủ sâu",
+                desc: "Tắt đèn, nghỉ ngơi đúng giờ",
+                type: "rest"
+              });
+
               listToRender = schedule;
             }
 
