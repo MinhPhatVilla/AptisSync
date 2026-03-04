@@ -3,19 +3,25 @@
 CREATE TABLE public.user_state (
   id UUID REFERENCES auth.users(id) PRIMARY KEY,
   schedule JSONB,
+  schedule_date TIMESTAMP WITH TIME ZONE,
   blocks JSONB,
   active_block_index INT DEFAULT 0,
   time_left INT DEFAULT 0,
+  end_time TIMESTAMP WITH TIME ZONE,
   is_active BOOLEAN DEFAULT false,
   is_paused_day BOOLEAN DEFAULT false,
   stars INT DEFAULT 0,
+  silver_stars INT DEFAULT 0,
   failed_days INT DEFAULT 0,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
--- Dành cho Update (Nếu đã tạo bảng trước đó, hãy chạy riêng 2 dòng này)
+-- Dành cho Update (Nếu đã tạo bảng trước đó, hãy chạy riêng các dòng cần thiết)
 -- ALTER TABLE public.user_state ADD COLUMN stars INT DEFAULT 0;
 -- ALTER TABLE public.user_state ADD COLUMN failed_days INT DEFAULT 0;
+-- ALTER TABLE public.user_state ADD COLUMN silver_stars INT DEFAULT 0;
+-- ALTER TABLE public.user_state ADD COLUMN schedule_date TIMESTAMP WITH TIME ZONE;
+-- ALTER TABLE public.user_state ADD COLUMN end_time TIMESTAMP WITH TIME ZONE;
 
 -- Bật bảo mật RLS
 ALTER TABLE public.user_state ENABLE ROW LEVEL SECURITY;

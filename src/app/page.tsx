@@ -75,9 +75,11 @@ export default function AptisIntensivePage() {
     // Persist to DB
     const dbUpdates = { id: user.id, updated_at: new Date().toISOString() } as any;
     if (updates.schedule !== undefined) dbUpdates.schedule = updates.schedule;
+    if (updates.schedule_date !== undefined) dbUpdates.schedule_date = updates.schedule_date;
     if (updates.blocks) dbUpdates.blocks = updates.blocks;
     if (updates.activeBlockIndex !== undefined) dbUpdates.active_block_index = updates.activeBlockIndex;
     if (updates.timeLeft !== undefined) dbUpdates.time_left = updates.timeLeft;
+    if (updates.endTime !== undefined) dbUpdates.end_time = updates.endTime;
     if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
     if (updates.isPausedDay !== undefined) dbUpdates.is_paused_day = updates.isPausedDay;
     if (updates.stars !== undefined) dbUpdates.stars = updates.stars;
@@ -87,6 +89,31 @@ export default function AptisIntensivePage() {
     await supabase.from('user_state').upsert(dbUpdates);
   };
 
+  // Helper: reset toàn bộ state cho ngày mới
+  const resetForNewDay = (preservedData?: { stars?: number; silver_stars?: number; failed_days?: number }) => {
+    setBlocks(INITIAL_BLOCKS);
+    setActiveBlockIndex(0);
+    setTimeLeft(0);
+    setIsPausedDay(false);
+    setIsActive(false);
+    setGeneratedSchedule([]);
+    setPlanStep(0);
+    endTimeRef.current = null;
+    if (preservedData?.stars !== undefined) setStars(preservedData.stars);
+    if (preservedData?.silver_stars !== undefined) setSilverStars(preservedData.silver_stars);
+    if (preservedData?.failed_days !== undefined) setFailedDays(preservedData.failed_days);
+    syncAndBroadcast({
+      schedule: [],
+      schedule_date: null,
+      blocks: INITIAL_BLOCKS,
+      activeBlockIndex: 0,
+      timeLeft: 0,
+      endTime: null,
+      isActive: false,
+      isPausedDay: false
+    });
+  };
+
   useEffect(() => {
     if (!user) return;
 
@@ -94,44 +121,52 @@ export default function AptisIntensivePage() {
     const loadState = async () => {
       const { data } = await supabase.from('user_state').select('*').eq('id', user.id).single();
       if (data) {
-        if (data.updated_at) {
-          const lastDate = new Date(data.updated_at).toDateString();
-          const today = new Date().toDateString();
-          if (lastDate !== today) {
-            // Ngày mới: reset toàn bộ blocks, xoá lịch trình cũ
-            setBlocks(INITIAL_BLOCKS);
-            setActiveBlockIndex(0);
-            setTimeLeft(0);
-            setIsPausedDay(false);
-            setIsActive(false);
-            setGeneratedSchedule([]);
-            setPlanStep(0);
-            if (data.stars !== undefined) setStars(data.stars);
-            if (data.silver_stars !== undefined) setSilverStars(data.silver_stars);
-            if (data.failed_days !== undefined) setFailedDays(data.failed_days);
-            syncAndBroadcast({
-              schedule: [],
-              blocks: INITIAL_BLOCKS,
-              activeBlockIndex: 0,
-              timeLeft: 0,
-              isActive: false,
-              isPausedDay: false
-            });
-            return;
-          }
+        const today = new Date().toDateString();
+
+        // Kiểm tra ngày mới: dùng schedule_date (ưu tiên) hoặc updated_at (fallback)
+        let isNewDay = false;
+        if (data.schedule_date) {
+          isNewDay = new Date(data.schedule_date).toDateString() !== today;
+        } else if (data.updated_at) {
+          isNewDay = new Date(data.updated_at).toDateString() !== today;
+        }
+
+        // Kiểm tra bổ sung: nếu schedule có data nhưng blocks đã reset (tất cả uncompleted)
+        // thì schedule cũ đang bị "mồ côi" → cần xoá
+        const hasSchedule = data.schedule && Array.isArray(data.schedule) && data.schedule.length > 0;
+        const blocksAreInitial = !data.blocks || (Array.isArray(data.blocks) && data.blocks.every((b: Block) => !b.completed));
+        const isStaleSchedule = hasSchedule && blocksAreInitial && !data.is_active;
+
+        if (isNewDay || isStaleSchedule) {
+          // Ngày mới hoặc schedule cũ mồ côi: reset toàn bộ
+          resetForNewDay({
+            stars: data.stars,
+            silver_stars: data.silver_stars,
+            failed_days: data.failed_days
+          });
+          return;
         }
 
         if (data.blocks) setBlocks(data.blocks);
         if (data.active_block_index !== undefined) setActiveBlockIndex(data.active_block_index);
-        if (data.time_left !== undefined) setTimeLeft(data.time_left);
         if (data.is_paused_day !== undefined) setIsPausedDay(data.is_paused_day);
         if (data.is_active !== undefined) setIsActive(data.is_active);
         if (data.stars !== undefined) setStars(data.stars);
         if (data.silver_stars !== undefined) setSilverStars(data.silver_stars);
         if (data.failed_days !== undefined) setFailedDays(data.failed_days);
-        if (data.schedule) {
+        if (hasSchedule) {
           setGeneratedSchedule(data.schedule);
           if (data.schedule.length > 0) setPlanStep(3);
+        }
+
+        // Tính lại timeLeft từ end_time tuyệt đối (chống lệch giờ giữa các thiết bị)
+        if (data.is_active && data.end_time) {
+          const endMs = new Date(data.end_time).getTime();
+          const remaining = Math.max(0, Math.ceil((endMs - Date.now()) / 1000));
+          setTimeLeft(remaining);
+          endTimeRef.current = endMs;
+        } else if (data.time_left !== undefined) {
+          setTimeLeft(data.time_left);
         }
       }
     };
@@ -143,7 +178,6 @@ export default function AptisIntensivePage() {
       const newState = payload.payload;
       if (newState.blocks) setBlocks(newState.blocks);
       if (newState.activeBlockIndex !== undefined) setActiveBlockIndex(newState.activeBlockIndex);
-      if (newState.timeLeft !== undefined) setTimeLeft(newState.timeLeft);
       if (newState.isActive !== undefined) setIsActive(newState.isActive);
       if (newState.isPausedDay !== undefined) setIsPausedDay(newState.isPausedDay);
       if (newState.stars !== undefined) setStars(newState.stars);
@@ -152,6 +186,19 @@ export default function AptisIntensivePage() {
       if (newState.schedule) {
         setGeneratedSchedule(newState.schedule);
         if (newState.schedule.length > 0) setPlanStep(3);
+      }
+
+      // Nhận end_time tuyệt đối từ thiết bị khác → tính lại timeLeft chính xác
+      if (newState.endTime && newState.isActive) {
+        const endMs = new Date(newState.endTime).getTime();
+        const remaining = Math.max(0, Math.ceil((endMs - Date.now()) / 1000));
+        setTimeLeft(remaining);
+        endTimeRef.current = endMs;
+      } else if (newState.endTime === null) {
+        endTimeRef.current = null;
+        if (newState.timeLeft !== undefined) setTimeLeft(newState.timeLeft);
+      } else if (newState.timeLeft !== undefined) {
+        setTimeLeft(newState.timeLeft);
       }
     }).subscribe((status) => {
       if (status === 'SUBSCRIBED') {
@@ -334,6 +381,7 @@ export default function AptisIntensivePage() {
 
       syncAndBroadcast({
         schedule: generatedSchedule,
+        schedule_date: new Date().toISOString(),
         blocks: INITIAL_BLOCKS,
         activeBlockIndex: 0,
         timeLeft: 0,
@@ -346,6 +394,7 @@ export default function AptisIntensivePage() {
       // Chỉ setup lịch mai mà hôm nay chưa đụng vô block nào thì không trừ điểm
       syncAndBroadcast({
         schedule: generatedSchedule,
+        schedule_date: new Date().toISOString(),
         blocks: INITIAL_BLOCKS,
         activeBlockIndex: 0,
         timeLeft: 0,
@@ -395,23 +444,8 @@ export default function AptisIntensivePage() {
       const todayStr = currentDateTime.toDateString();
       if (lastDayRef.current !== todayStr) {
         lastDayRef.current = todayStr;
-        // Ngày mới: reset blocks + xoá lịch trình cũ hoàn toàn
-        setBlocks(INITIAL_BLOCKS);
-        setActiveBlockIndex(0);
-        setTimeLeft(0);
-        setIsActive(false);
-        setIsPausedDay(false);
-        setGeneratedSchedule([]);
-        setPlanStep(0);
-        endTimeRef.current = null;
-        syncAndBroadcast({
-          schedule: [],
-          blocks: INITIAL_BLOCKS,
-          activeBlockIndex: 0,
-          timeLeft: 0,
-          isActive: false,
-          isPausedDay: false
-        });
+        // Đồng hồ vừa qua nửa đêm: reset toàn bộ cho ngày mới
+        resetForNewDay();
       }
     }
   }, [currentDateTime]);
@@ -488,6 +522,8 @@ export default function AptisIntensivePage() {
     if (isActive && timeLeft > 0) {
       if (!endTimeRef.current) {
         endTimeRef.current = Date.now() + timeLeft * 1000;
+        // Sync mốc end_time tuyệt đối lên DB để thiết bị khác đồng bộ chính xác
+        syncAndBroadcast({ endTime: new Date(endTimeRef.current).toISOString(), isActive: true });
       }
       interval = setInterval(() => {
         const remaining = Math.max(0, Math.ceil((endTimeRef.current! - Date.now()) / 1000));
@@ -637,12 +673,14 @@ export default function AptisIntensivePage() {
     newSchedule.push({ time: `${ft(bedH, bedM)} - Sáng mai`, title: "Vệ sinh cá nhân, Night Plan & Ngủ sâu", desc: "Lên giường ngủ nghỉ đúng giờ", type: "rest" });
 
     setGeneratedSchedule(newSchedule);
+    const newEndTime = (newActiveIndex < updatedBlocks.length && newTimeLeft > 0) ? new Date(Date.now() + newTimeLeft * 1000).toISOString() : null;
     syncAndBroadcast({
       blocks: updatedBlocks,
       activeBlockIndex: newActiveIndex,
       isActive: newActiveIndex < updatedBlocks.length,
       isPausedDay: false,
       timeLeft: newTimeLeft,
+      endTime: newEndTime,
       schedule: newSchedule
     });
   };
@@ -665,15 +703,23 @@ export default function AptisIntensivePage() {
       setActiveBlockIndex(nextIndex);
       setTimeLeft(newBlocks[nextIndex].durationMins * 60);
     }
-    syncAndBroadcast({ blocks: newBlocks, activeBlockIndex: nextIndex, silverStars: newSilverStars });
+    syncAndBroadcast({ blocks: newBlocks, activeBlockIndex: nextIndex, silverStars: newSilverStars, endTime: null, timeLeft: newBlocks[nextIndex]?.durationMins ? newBlocks[nextIndex].durationMins * 60 : 0 });
   };
 
   const toggleTimer = () => {
     if (activeBlockIndex >= blocks.length || isPausedDay) return; // All done
     const newIsActive = !isActive;
     setIsActive(newIsActive);
-    if (!newIsActive) endTimeRef.current = null;
-    syncAndBroadcast({ isActive: newIsActive, timeLeft });
+    if (newIsActive) {
+      // Bắt đầu/tiếp tục: tính mốc end_time tuyệt đối
+      const endMs = Date.now() + timeLeft * 1000;
+      endTimeRef.current = endMs;
+      syncAndBroadcast({ isActive: true, timeLeft, endTime: new Date(endMs).toISOString() });
+    } else {
+      // Tạm dừng: xoá end_time, lưu lại timeLeft hiện tại
+      endTimeRef.current = null;
+      syncAndBroadcast({ isActive: false, timeLeft, endTime: null });
+    }
   };
 
   const formatTime = (seconds: number) => {
