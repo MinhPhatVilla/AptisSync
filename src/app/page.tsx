@@ -41,6 +41,7 @@ export default function AptisIntensivePage() {
   const [isPausedDay, setIsPausedDay] = useState(false);
 
   const endTimeRef = useRef<number | null>(null);
+  const lastDayRef = useRef<string>(new Date().toDateString());
 
   // Voice Settings
   const [viVoices, setViVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -93,6 +94,33 @@ export default function AptisIntensivePage() {
     const loadState = async () => {
       const { data } = await supabase.from('user_state').select('*').eq('id', user.id).single();
       if (data) {
+        if (data.updated_at) {
+          const lastDate = new Date(data.updated_at).toDateString();
+          const today = new Date().toDateString();
+          if (lastDate !== today) {
+            setBlocks(INITIAL_BLOCKS);
+            setActiveBlockIndex(0);
+            setTimeLeft(0);
+            setIsPausedDay(false);
+            setIsActive(false);
+            if (data.stars !== undefined) setStars(data.stars);
+            if (data.silver_stars !== undefined) setSilverStars(data.silver_stars);
+            if (data.failed_days !== undefined) setFailedDays(data.failed_days);
+            if (data.schedule) {
+              setGeneratedSchedule(data.schedule);
+              if (data.schedule.length > 0) setPlanStep(3);
+            }
+            syncAndBroadcast({
+              blocks: INITIAL_BLOCKS,
+              activeBlockIndex: 0,
+              timeLeft: 0,
+              isActive: false,
+              isPausedDay: false
+            });
+            return;
+          }
+        }
+
         if (data.blocks) setBlocks(data.blocks);
         if (data.active_block_index !== undefined) setActiveBlockIndex(data.active_block_index);
         if (data.time_left !== undefined) setTimeLeft(data.time_left);
@@ -362,6 +390,27 @@ export default function AptisIntensivePage() {
     return () => clearInterval(dtInterval);
   }, []);
 
+  useEffect(() => {
+    if (currentDateTime) {
+      const todayStr = currentDateTime.toDateString();
+      if (lastDayRef.current !== todayStr) {
+        lastDayRef.current = todayStr;
+        setBlocks(INITIAL_BLOCKS);
+        setActiveBlockIndex(0);
+        setTimeLeft(0);
+        setIsActive(false);
+        setIsPausedDay(false);
+        syncAndBroadcast({
+          blocks: INITIAL_BLOCKS,
+          activeBlockIndex: 0,
+          timeLeft: 0,
+          isActive: false,
+          isPausedDay: false
+        });
+      }
+    }
+  }, [currentDateTime]);
+
   const formatRealTime = (d: Date | null) => {
     if (!d) return "";
     const days = ['Chủ Nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
@@ -379,11 +428,15 @@ export default function AptisIntensivePage() {
       msg.rate = 1.0;
       msg.pitch = 1.3;
 
-      const voices = window.speechSynthesis.getVoices();
-      // Ưu tiên các giọng nữ của tiếng Việt. Google Tiếng Việt thường là giọng nữ chuẩn.
-      let viVoice = voices.find(v => v.name === 'Google Tiếng Việt')
-        || voices.find(v => v.lang === 'vi-VN' && (v.name.includes('Female') || v.name.includes('Lieu')))
-        || voices.find(v => v.lang.includes('vi'));
+      let viVoice = null;
+      if (viVoices.length > 0 && viVoices[selectedVoiceIndex]) {
+        viVoice = viVoices[selectedVoiceIndex];
+      } else {
+        const voices = window.speechSynthesis.getVoices();
+        viVoice = voices.find(v => v.name === 'Google Tiếng Việt')
+          || voices.find(v => v.lang === 'vi-VN' && (v.name.includes('Female') || v.name.includes('Lieu')))
+          || voices.find(v => v.lang.includes('vi'));
+      }
 
       if (viVoice) {
         msg.voice = viVoice;
