@@ -74,7 +74,7 @@ export default function AptisIntensivePage() {
 
     // Persist to DB
     const dbUpdates = { id: user.id, updated_at: new Date().toISOString() } as any;
-    if (updates.schedule) dbUpdates.schedule = updates.schedule;
+    if (updates.schedule !== undefined) dbUpdates.schedule = updates.schedule;
     if (updates.blocks) dbUpdates.blocks = updates.blocks;
     if (updates.activeBlockIndex !== undefined) dbUpdates.active_block_index = updates.activeBlockIndex;
     if (updates.timeLeft !== undefined) dbUpdates.time_left = updates.timeLeft;
@@ -98,19 +98,19 @@ export default function AptisIntensivePage() {
           const lastDate = new Date(data.updated_at).toDateString();
           const today = new Date().toDateString();
           if (lastDate !== today) {
+            // Ngày mới: reset toàn bộ blocks, xoá lịch trình cũ
             setBlocks(INITIAL_BLOCKS);
             setActiveBlockIndex(0);
             setTimeLeft(0);
             setIsPausedDay(false);
             setIsActive(false);
+            setGeneratedSchedule([]);
+            setPlanStep(0);
             if (data.stars !== undefined) setStars(data.stars);
             if (data.silver_stars !== undefined) setSilverStars(data.silver_stars);
             if (data.failed_days !== undefined) setFailedDays(data.failed_days);
-            if (data.schedule) {
-              setGeneratedSchedule(data.schedule);
-              if (data.schedule.length > 0) setPlanStep(3);
-            }
             syncAndBroadcast({
+              schedule: [],
               blocks: INITIAL_BLOCKS,
               activeBlockIndex: 0,
               timeLeft: 0,
@@ -395,12 +395,17 @@ export default function AptisIntensivePage() {
       const todayStr = currentDateTime.toDateString();
       if (lastDayRef.current !== todayStr) {
         lastDayRef.current = todayStr;
+        // Ngày mới: reset blocks + xoá lịch trình cũ hoàn toàn
         setBlocks(INITIAL_BLOCKS);
         setActiveBlockIndex(0);
         setTimeLeft(0);
         setIsActive(false);
         setIsPausedDay(false);
+        setGeneratedSchedule([]);
+        setPlanStep(0);
+        endTimeRef.current = null;
         syncAndBroadcast({
+          schedule: [],
           blocks: INITIAL_BLOCKS,
           activeBlockIndex: 0,
           timeLeft: 0,
