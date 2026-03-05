@@ -632,6 +632,54 @@ export default function AptisIntensivePage() {
       return { mins: 30, desc: "30 phút • Nghỉ giải lao lớn, thư giãn não bộ, ăn nhẹ nếu đói" };
     };
 
+    // === KHUNG GIỜ CỐ ĐỊNH: 17:00 - 19:00 (Tắm rửa + Ăn tối) ===
+    const FIXED_START = 17 * 60; // 17:00
+    const FIXED_MID = 18 * 60;   // 18:00
+    const FIXED_END = 19 * 60;   // 19:00
+
+    // Helper: chèn block cố định 17:00-19:00 nếu cần
+    const insertFixedDinnerBlock = (schedule: ScheduleItem[], startTotal: number): [number, number] => {
+      // Nếu đang trước 17:00 hoặc đã qua 19:00 → không cần chèn
+      if (startTotal >= FIXED_END || startTotal < FIXED_START) return [Math.floor(startTotal / 60), startTotal % 60];
+
+      // Đang trong khoảng 17:00-19:00 → chèn phần còn lại
+      if (startTotal < FIXED_MID) {
+        const bathEndH = Math.floor(FIXED_MID / 60);
+        const bathEndM = FIXED_MID % 60;
+        schedule.push({
+          time: `${ft(Math.floor(startTotal / 60), startTotal % 60)} - ${ft(bathEndH, bathEndM)}`,
+          title: "Thể dục & Tắm rửa",
+          desc: `${FIXED_MID - startTotal} phút • Vận động, tắm sạch sẽ`,
+          type: "rest"
+        });
+        startTotal = FIXED_MID;
+      }
+      if (startTotal < FIXED_END) {
+        const dinnerEndH = Math.floor(FIXED_END / 60);
+        const dinnerEndM = FIXED_END % 60;
+        schedule.push({
+          time: `${ft(Math.floor(startTotal / 60), startTotal % 60)} - ${ft(dinnerEndH, dinnerEndM)}`,
+          title: "Ăn tối & Nghỉ ngơi",
+          desc: `${FIXED_END - startTotal} phút • Ăn tối từ tốn, nghỉ ngơi nhẹ`,
+          type: "rest"
+        });
+        startTotal = FIXED_END;
+      }
+      return [Math.floor(startTotal / 60), startTotal % 60];
+    };
+
+    // Helper: tính thời gian học khả dụng (trừ đi khung giờ cố định 17-19h)
+    const getAvailableStudyMins = (fromTotal: number, toTotal: number): number => {
+      let available = toTotal - fromTotal;
+      // Nếu khoảng thời gian chứa khung 17:00-19:00 → trừ đi
+      const overlapStart = Math.max(fromTotal, FIXED_START);
+      const overlapEnd = Math.min(toTotal, FIXED_END);
+      if (overlapStart < overlapEnd) {
+        available -= (overlapEnd - overlapStart);
+      }
+      return Math.max(0, available);
+    };
+
     if (remainingRealMins > remainingAptisMins) {
       // === CÒN DƯ THỜI GIAN SAU APTIS → CHIA CHU KỲ HỌC + NGHỈ ===
       let consecutiveCycles = 0;
@@ -639,61 +687,146 @@ export default function AptisIntensivePage() {
       // Phần 1: Xếp các block Aptis còn lại + break thông minh
       for (let i = activeBlockIndex; i < blocks.length; i++) {
         let bDuration = (i === activeBlockIndex) ? Math.ceil(timeLeft / 60) : blocks[i].durationMins;
-        newSchedule.push({
-          time: `${ft(currH, currM)} - ${ft(currH, currM + bDuration)}`,
-          title: `Tiếp Tục: ${blocks[i].title}`,
-          desc: "Khối thời gian linh hoạt",
-          type: "aptis"
-        });
-        [currH, currM] = addMins(currH, currM, bDuration);
+
+        // Kiểm tra nếu block này sẽ chạm vào khung 17:00-19:00
+        let blockStart = toTotal(currH, currM);
+        let blockEnd = blockStart + bDuration;
+
+        if (blockStart < FIXED_START && blockEnd > FIXED_START) {
+          // Block sẽ xuyên qua 17:00 → cắt đôi
+          const firstHalf = FIXED_START - blockStart;
+          if (firstHalf > 0) {
+            newSchedule.push({
+              time: `${ft(currH, currM)} - 17:00`,
+              title: `Tiếp Tục: ${blocks[i].title}`,
+              desc: `${firstHalf} phút • Học đến giờ tắm & ăn tối`,
+              type: "aptis"
+            });
+            [currH, currM] = [17, 0];
+          }
+
+          // Chèn khung cố định 17:00-19:00
+          [currH, currM] = insertFixedDinnerBlock(newSchedule, FIXED_START);
+          consecutiveCycles = 0; // Reset sau nghỉ dài
+
+          // Phần còn lại của block sau 19:00
+          const secondHalf = bDuration - firstHalf;
+          if (secondHalf > 0) {
+            newSchedule.push({
+              time: `${ft(currH, currM)} - ${ft(currH, currM + secondHalf)}`,
+              title: `Tiếp Tục: ${blocks[i].title}`,
+              desc: `${secondHalf} phút • Tiếp tục sau ăn tối`,
+              type: "aptis"
+            });
+            [currH, currM] = addMins(currH, currM, secondHalf);
+          }
+        } else if (blockStart >= FIXED_START && blockStart < FIXED_END) {
+          // Đang trong khung 17:00-19:00 → chèn dinner trước
+          [currH, currM] = insertFixedDinnerBlock(newSchedule, blockStart);
+          consecutiveCycles = 0;
+
+          // Rồi xếp block sau 19:00
+          newSchedule.push({
+            time: `${ft(currH, currM)} - ${ft(currH, currM + bDuration)}`,
+            title: `Tiếp Tục: ${blocks[i].title}`,
+            desc: "Khối thời gian linh hoạt",
+            type: "aptis"
+          });
+          [currH, currM] = addMins(currH, currM, bDuration);
+        } else {
+          // Block nằm hoàn toàn ngoài khung 17-19h → xếp bình thường
+          newSchedule.push({
+            time: `${ft(currH, currM)} - ${ft(currH, currM + bDuration)}`,
+            title: `Tiếp Tục: ${blocks[i].title}`,
+            desc: "Khối thời gian linh hoạt",
+            type: "aptis"
+          });
+          [currH, currM] = addMins(currH, currM, bDuration);
+        }
         consecutiveCycles++;
 
         // Break giữa các block Aptis
         if (i < blocks.length - 1) {
-          const brk = getSmartBreak(bDuration, consecutiveCycles);
-          newSchedule.push({
-            time: `${ft(currH, currM)} - ${ft(currH, currM + brk.mins)}`,
-            title: "Nghỉ giải lao",
-            desc: brk.desc,
-            type: "rest"
-          });
-          [currH, currM] = addMins(currH, currM, brk.mins);
-          // Reset consecutive counter sau nghỉ dài (≥30p)
-          if (brk.mins >= 30) consecutiveCycles = 0;
+          // Kiểm tra nếu break rơi vào khung 17-19h → thay bằng dinner
+          let breakStart = toTotal(currH, currM);
+          if (breakStart >= FIXED_START && breakStart < FIXED_END) {
+            [currH, currM] = insertFixedDinnerBlock(newSchedule, breakStart);
+            consecutiveCycles = 0;
+          } else {
+            const brk = getSmartBreak(bDuration, consecutiveCycles);
+            // Nếu break sẽ chạm vào 17:00 → cắt ngắn break + chèn dinner
+            let brkEnd = breakStart + brk.mins;
+            if (breakStart < FIXED_START && brkEnd > FIXED_START) {
+              const shortBreak = FIXED_START - breakStart;
+              if (shortBreak >= 5) {
+                newSchedule.push({
+                  time: `${ft(currH, currM)} - 17:00`,
+                  title: "Nghỉ giải lao",
+                  desc: `${shortBreak} phút • Uống nước, đi lại`,
+                  type: "rest"
+                });
+              }
+              [currH, currM] = [17, 0];
+              [currH, currM] = insertFixedDinnerBlock(newSchedule, FIXED_START);
+              consecutiveCycles = 0;
+            } else {
+              newSchedule.push({
+                time: `${ft(currH, currM)} - ${ft(currH, currM + brk.mins)}`,
+                title: "Nghỉ giải lao",
+                desc: brk.desc,
+                type: "rest"
+              });
+              [currH, currM] = addMins(currH, currM, brk.mins);
+              if (brk.mins >= 30) consecutiveCycles = 0;
+            }
+          }
         }
       }
 
       // Phần 2: Thời gian dư → chia thành chu kỳ "Tự học/Ôn tập" + break
-      // KHÔNG để 1 block "Thư giãn tự do" dài vô tận
       let cTot = toTotal(currH, currM);
+
+      // Chèn khung cố định nếu chưa qua
+      if (cTot >= FIXED_START && cTot < FIXED_END) {
+        [currH, currM] = insertFixedDinnerBlock(newSchedule, cTot);
+        consecutiveCycles = 0;
+        cTot = toTotal(currH, currM);
+      }
+
       let freeTimeMins = bedTotal - cTot;
 
       if (freeTimeMins > 0) {
-        // Break 15p sau khối Aptis cuối trước khi vào chu kỳ phụ
+        // Break sau khối Aptis cuối trước khi vào chu kỳ phụ
         const postAptisBreak = getSmartBreak(blocks[blocks.length - 1]?.durationMins || 60, consecutiveCycles);
-        if (freeTimeMins > postAptisBreak.mins + 30) { // Chỉ thêm break nếu còn đủ thời gian
-          newSchedule.push({
-            time: `${ft(currH, currM)} - ${ft(currH, currM + postAptisBreak.mins)}`,
-            title: "Nghỉ giải lao",
-            desc: postAptisBreak.desc,
-            type: "rest"
-          });
-          [currH, currM] = addMins(currH, currM, postAptisBreak.mins);
-          freeTimeMins -= postAptisBreak.mins;
-          if (postAptisBreak.mins >= 30) consecutiveCycles = 0;
+        if (freeTimeMins > postAptisBreak.mins + 30) {
+          // Kiểm tra break có chạm 17:00-19:00 không
+          let breakStart = toTotal(currH, currM);
+          if (breakStart >= FIXED_START && breakStart < FIXED_END) {
+            [currH, currM] = insertFixedDinnerBlock(newSchedule, breakStart);
+            consecutiveCycles = 0;
+          } else {
+            newSchedule.push({
+              time: `${ft(currH, currM)} - ${ft(currH, currM + postAptisBreak.mins)}`,
+              title: "Nghỉ giải lao",
+              desc: postAptisBreak.desc,
+              type: "rest"
+            });
+            [currH, currM] = addMins(currH, currM, postAptisBreak.mins);
+            if (postAptisBreak.mins >= 30) consecutiveCycles = 0;
+          }
+          freeTimeMins = bedTotal - toTotal(currH, currM);
         }
 
         // Dành tối đa 90 phút cuối cho "Thư giãn tự do" trước ngủ
-        // + 15 phút cho "Vệ sinh cá nhân"
-        const windDownMins = 15; // Vệ sinh cá nhân trước ngủ
-        const maxRelaxMins = Math.min(90, Math.max(30, Math.floor(freeTimeMins * 0.3))); // 30% thời gian dư, tối thiểu 30p, tối đa 90p
-        const timeForStudyCycles = freeTimeMins - maxRelaxMins - windDownMins;
+        const windDownMins = 15;
+        const availableForStudy = getAvailableStudyMins(toTotal(currH, currM), bedTotal);
+        const maxRelaxMins = Math.min(90, Math.max(30, Math.floor(availableForStudy * 0.3)));
+        const timeForStudyCycles = availableForStudy - maxRelaxMins - windDownMins;
 
         if (timeForStudyCycles >= 30) {
-          // Chia thành chu kỳ tự học 45 phút + break
           let studyTimeLeft = timeForStudyCycles;
           let cycleCount = 0;
-          const studyCycleDuration = 45; // Mỗi chu kỳ tự học 45 phút
+          const studyCycleDuration = 45;
 
           const studyTopics = [
             { title: "Ôn tập tổng hợp Aptis", desc: "Xem lại từ vựng, ôn lại lỗi sai, luyện thêm đề" },
@@ -703,9 +836,38 @@ export default function AptisIntensivePage() {
           ];
 
           while (studyTimeLeft >= 30) {
-            const thisCycleDuration = Math.min(studyCycleDuration, studyTimeLeft);
-            const topic = studyTopics[cycleCount % studyTopics.length];
+            // Kiểm tra nếu đang trong khung 17-19h → chèn dinner trước
+            let nowTotal = toTotal(currH, currM);
+            if (nowTotal >= FIXED_START && nowTotal < FIXED_END) {
+              [currH, currM] = insertFixedDinnerBlock(newSchedule, nowTotal);
+              consecutiveCycles = 0;
+              nowTotal = toTotal(currH, currM);
+            }
 
+            const thisCycleDuration = Math.min(studyCycleDuration, studyTimeLeft);
+            let cycleEnd = nowTotal + thisCycleDuration;
+
+            // Nếu chu kỳ xuyên qua 17:00 → cắt đôi
+            if (nowTotal < FIXED_START && cycleEnd > FIXED_START) {
+              const firstHalf = FIXED_START - nowTotal;
+              const topic = studyTopics[cycleCount % studyTopics.length];
+              if (firstHalf >= 15) {
+                newSchedule.push({
+                  time: `${ft(currH, currM)} - 17:00`,
+                  title: topic.title,
+                  desc: `${firstHalf} phút • ${topic.desc}`,
+                  type: cycleCount % 2 === 0 ? "aptis" : "school"
+                });
+                studyTimeLeft -= firstHalf;
+                cycleCount++;
+              }
+              [currH, currM] = [17, 0];
+              [currH, currM] = insertFixedDinnerBlock(newSchedule, FIXED_START);
+              consecutiveCycles = 0;
+              continue; // Re-enter loop to schedule remaining study time
+            }
+
+            const topic = studyTopics[cycleCount % studyTopics.length];
             newSchedule.push({
               time: `${ft(currH, currM)} - ${ft(currH, currM + thisCycleDuration)}`,
               title: topic.title,
@@ -719,22 +881,33 @@ export default function AptisIntensivePage() {
 
             // Break giữa các chu kỳ tự học
             if (studyTimeLeft >= 30) {
-              const brk = getSmartBreak(thisCycleDuration, consecutiveCycles);
-              // Đảm bảo break không ăn hết thời gian còn lại
-              const actualBreak = Math.min(brk.mins, studyTimeLeft - 30);
-              if (actualBreak >= 5) {
-                newSchedule.push({
-                  time: `${ft(currH, currM)} - ${ft(currH, currM + actualBreak)}`,
-                  title: "Nghỉ giải lao",
-                  desc: actualBreak >= 30 ? `${actualBreak} phút • Nghỉ dài, thư giãn` : actualBreak >= 15 ? `${actualBreak} phút • Giãn cơ, uống nước` : `${actualBreak} phút • Uống nước, đi lại`,
-                  type: "rest"
-                });
-                [currH, currM] = addMins(currH, currM, actualBreak);
-                studyTimeLeft -= actualBreak;
-                if (actualBreak >= 30) consecutiveCycles = 0;
+              let breakStartTot = toTotal(currH, currM);
+              if (breakStartTot >= FIXED_START && breakStartTot < FIXED_END) {
+                [currH, currM] = insertFixedDinnerBlock(newSchedule, breakStartTot);
+                consecutiveCycles = 0;
+              } else {
+                const brk = getSmartBreak(thisCycleDuration, consecutiveCycles);
+                const actualBreak = Math.min(brk.mins, studyTimeLeft - 30);
+                if (actualBreak >= 5) {
+                  newSchedule.push({
+                    time: `${ft(currH, currM)} - ${ft(currH, currM + actualBreak)}`,
+                    title: "Nghỉ giải lao",
+                    desc: actualBreak >= 30 ? `${actualBreak} phút • Nghỉ dài, thư giãn` : actualBreak >= 15 ? `${actualBreak} phút • Giãn cơ, uống nước` : `${actualBreak} phút • Uống nước, đi lại`,
+                    type: "rest"
+                  });
+                  [currH, currM] = addMins(currH, currM, actualBreak);
+                  studyTimeLeft -= actualBreak;
+                  if (actualBreak >= 30) consecutiveCycles = 0;
+                }
               }
             }
           }
+        }
+
+        // Chèn dinner nếu chưa qua (trường hợp study cycles kết thúc trước 17:00)
+        cTot = toTotal(currH, currM);
+        if (cTot >= FIXED_START && cTot < FIXED_END) {
+          [currH, currM] = insertFixedDinnerBlock(newSchedule, cTot);
         }
 
         // Thêm block "Thư giãn tự do" trước ngủ (tối đa 90 phút)
@@ -766,24 +939,55 @@ export default function AptisIntensivePage() {
       }
     } else {
       // === KHÔNG ĐỦ THỜI GIAN → ÉP TIẾN ĐỘ ===
-      let availableMins = remainingRealMins;
+      // Vẫn giữ khung 17-19h nếu chưa qua
+      let availableMins = getAvailableStudyMins(currTotal, bedTotal);
       let droppedBlocksCount = 0;
 
       for (let i = activeBlockIndex; i < blocks.length; i++) {
+        // Kiểm tra nếu đang trong khung 17-19h → chèn dinner trước
+        let nowTot = toTotal(currH, currM);
+        if (nowTot >= FIXED_START && nowTot < FIXED_END) {
+          [currH, currM] = insertFixedDinnerBlock(newSchedule, nowTot);
+          nowTot = toTotal(currH, currM);
+        }
+
         let bDuration = (i === activeBlockIndex) ? Math.ceil(timeLeft / 60) : blocks[i].durationMins;
 
         if (availableMins - bDuration >= 0) {
-          newSchedule.push({
-            time: `${ft(currH, currM)} - ${ft(currH, currM + bDuration)}`,
-            title: `Ép tiến độ: ${blocks[i].title}`,
-            desc: "Chạy đua thời gian • Không có break",
-            type: "urgent"
-          });
-          [currH, currM] = addMins(currH, currM, bDuration);
+          // Kiểm tra xuyên qua 17:00
+          let blockEnd = nowTot + bDuration;
+          if (nowTot < FIXED_START && blockEnd > FIXED_START) {
+            const firstHalf = FIXED_START - nowTot;
+            newSchedule.push({
+              time: `${ft(currH, currM)} - 17:00`,
+              title: `Ép tiến độ: ${blocks[i].title}`,
+              desc: `${firstHalf} phút • Học đến giờ ăn tối`,
+              type: "urgent"
+            });
+            [currH, currM] = [17, 0];
+            [currH, currM] = insertFixedDinnerBlock(newSchedule, FIXED_START);
+            const secondHalf = bDuration - firstHalf;
+            if (secondHalf > 0) {
+              newSchedule.push({
+                time: `${ft(currH, currM)} - ${ft(currH, currM + secondHalf)}`,
+                title: `Ép tiến độ: ${blocks[i].title}`,
+                desc: `${secondHalf} phút • Tiếp tục sau ăn tối`,
+                type: "urgent"
+              });
+              [currH, currM] = addMins(currH, currM, secondHalf);
+            }
+          } else {
+            newSchedule.push({
+              time: `${ft(currH, currM)} - ${ft(currH, currM + bDuration)}`,
+              title: `Ép tiến độ: ${blocks[i].title}`,
+              desc: "Chạy đua thời gian • Không có break",
+              type: "urgent"
+            });
+            [currH, currM] = addMins(currH, currM, bDuration);
+          }
           availableMins -= bDuration;
 
-          // Chỉ break 5 phút nếu còn đủ thời gian
-          if (i < blocks.length - 1 && availableMins >= bDuration + 5) {
+          if (i < blocks.length - 1 && availableMins >= 5) {
             newSchedule.push({
               time: `${ft(currH, currM)} - ${ft(currH, currM + 5)}`,
               title: "Giải lao nhanh",
@@ -794,7 +998,6 @@ export default function AptisIntensivePage() {
             availableMins -= 5;
           }
         } else if (availableMins >= 20) {
-          // Còn ít thời gian → rút ngắn block
           newSchedule.push({
             time: `${ft(currH, currM)} - ${ft(currH, currM + availableMins)}`,
             title: `Rút gọn: ${blocks[i].title}`,
@@ -804,14 +1007,19 @@ export default function AptisIntensivePage() {
           [currH, currM] = addMins(currH, currM, availableMins);
           availableMins = 0;
         } else {
-          // Drop block
           droppedBlocksCount++;
           updatedBlocks[i].completed = true;
         }
       }
 
-      // Vệ sinh + chuẩn bị ngủ
+      // Chèn dinner nếu chưa qua
       let cTot = toTotal(currH, currM);
+      if (cTot >= FIXED_START && cTot < FIXED_END) {
+        [currH, currM] = insertFixedDinnerBlock(newSchedule, cTot);
+      }
+
+      // Vệ sinh + chuẩn bị ngủ
+      cTot = toTotal(currH, currM);
       if (cTot < bedTotal && bedTotal - cTot > 0) {
         const remainMins = bedTotal - cTot;
         if (remainMins > 15) {
