@@ -679,7 +679,7 @@ export default function AptisIntensivePage() {
 
   const progressPercentage = (completedMinutes / TARGET_MINUTES) * 100;
   const currentBlock = blocks[activeBlockIndex];
-  const allCompleted = completedMinutes >= TARGET_MINUTES;
+  const allCompleted = activeBlockIndex >= blocks.length;
 
   if (!isMounted) return null;
 
