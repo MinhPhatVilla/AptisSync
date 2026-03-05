@@ -15,8 +15,8 @@ type Block = {
 
 const INITIAL_BLOCKS: Block[] = [
   { id: 1, title: "Luyện Nghe & Đọc Hiểu", durationMins: 90, completed: false },
-  { id: 2, title: "Từ Vựng Trắc Nghiệm", durationMins: 60, completed: false },
-  { id: 3, title: "Luyện Nói & Viết", durationMins: 120, completed: false },
+  { id: 2, title: "Từ Vựng & Ngữ Pháp", durationMins: 90, completed: false },
+  { id: 3, title: "Luyện Nói & Viết", durationMins: 90, completed: false },
 ];
 
 const TARGET_MINUTES = 270;
@@ -231,142 +231,151 @@ export default function AptisIntensivePage() {
   // Night Plan inputs & schedule
   const [schoolShift, setSchoolShift] = useState("");
   const [urgentTask, setUrgentTask] = useState("");
+  const [urgentTaskCycles, setUrgentTaskCycles] = useState<number>(1);
   const [wakeUpTime, setWakeUpTime] = useState("06:00");
 
   type ScheduleItem = { time: string; title: string; desc: string; type: "aptis" | "school" | "urgent" | "rest" };
   const [generatedSchedule, setGeneratedSchedule] = useState<ScheduleItem[]>([]);
 
-  const generateSchedule = () => {
+  const generateDynamicSchedule = (startMins: number, planningForTomorrow: boolean) => {
     const schedule: ScheduleItem[] = [];
+    let currentMins = startMins;
 
-    // === KHUNG GIỜ CỐ ĐỊNH ===
-    const BED_H = 23, BED_M = 45; // Giờ ngủ cố định
+    const fixedBlocks = [
+      { start: 6 * 60, end: 7 * 60, title: "Vệ sinh & Ăn sáng", desc: "Rửa mặt, đánh răng, nạp năng lượng", type: "rest" },
+      { start: 11 * 60, end: 13 * 60, title: "Ăn trưa & Ngủ trưa", desc: "Ăn đủ chất, ngủ trưa hồi phục", type: "rest" },
+      { start: 17 * 60, end: 19 * 60, title: "Thể thao, Tắm & Ăn tối", desc: "Vận động, tắm rửa sạch sẽ, ăn tối", type: "rest" }
+    ];
 
-    // 1. SÁNG: 06:00 - 07:00 (Tất cả kịch bản)
-    schedule.push({ time: "06:00 - 06:20", title: "Dậy & Vệ sinh cá nhân", desc: "Uống 1 cốc nước lọc lúc bụng đói • Rửa mặt, đánh răng", type: "rest" });
-    schedule.push({ time: "06:20 - 07:00", title: "Ăn sáng dinh dưỡng đầy đủ", desc: "Nạp năng lượng cho cơ thể • Không dùng điện thoại khi ăn", type: "rest" });
-
-    // 2. BUỔI SÁNG: 07:00 - 11:00
-    const isFullDay = schoolShift === "Sáng & Chiều" || schoolShift === "Thứ 7 (Học cả ngày)";
-
-    if (schoolShift === "Chỉ buổi Sáng" || isFullDay) {
-      // Có trường buổi sáng
-      schedule.push({ time: "07:00 - 11:00", title: "Học trên trường (Ca Sáng)", desc: "Tập trung chú ý thầy cô • Làm luôn bài tập khi rảnh", type: "school" });
-    } else if (schoolShift === "Chỉ buổi Chiều") {
-      // Sáng rảnh → Aptis Block 1 + 2
-      schedule.push({ time: "07:00 - 08:30", title: "Block 1: Luyện Nghe & Đọc Hiểu", desc: "90 phút Deep Work • Não tỉnh táo nhất buổi sáng", type: "aptis" });
-      schedule.push({ time: "08:30 - 08:45", title: "Nghỉ giải lao", desc: "15 phút • Đi lại, uống nước, KHÔNG nhìn màn hình", type: "rest" });
-      schedule.push({ time: "08:45 - 09:45", title: "Block 2: Từ Vựng Trắc Nghiệm", desc: "60 phút nạp từ vựng chuyên ngành Aptis", type: "aptis" });
-      schedule.push({ time: "09:45 - 10:00", title: "Nghỉ giải lao", desc: "15 phút • Giãn cơ, thư giãn mắt", type: "rest" });
-      schedule.push({ time: "10:00 - 11:00", title: "Làm bài tập trường", desc: "60 phút • Giải quyết bài tập về nhà, deadline", type: "school" });
-    } else {
-      // Nghỉ nhà → Aptis Block 1 + 2
-      schedule.push({ time: "07:00 - 08:30", title: "Block 1: Luyện Nghe & Đọc Hiểu", desc: "90 phút Deep Work • Não tỉnh táo nhất buổi sáng", type: "aptis" });
-      schedule.push({ time: "08:30 - 08:45", title: "Nghỉ giải lao", desc: "15 phút • Đi lại, uống nước, KHÔNG nhìn màn hình", type: "rest" });
-      schedule.push({ time: "08:45 - 09:45", title: "Block 2: Từ Vựng Trắc Nghiệm", desc: "60 phút nạp từ vựng chuyên ngành Aptis", type: "aptis" });
-      schedule.push({ time: "09:45 - 10:00", title: "Nghỉ giải lao", desc: "15 phút • Giãn cơ, thư giãn mắt", type: "rest" });
-      schedule.push({ time: "10:00 - 11:00", title: "Làm bài tập trường / Ôn tập", desc: "60 phút • Giải quyết bài tập, ôn lại kiến thức", type: "school" });
+    if (schoolShift === "Chỉ buổi Sáng" || schoolShift === "Sáng & Chiều" || schoolShift === "Thứ 7 (Học cả ngày)") {
+      fixedBlocks.push({ start: 7 * 60, end: 11 * 60, title: "Học trên trường (Ca Sáng)", desc: "Tập trung học trên lớp", type: "school" });
+    }
+    if (schoolShift === "Chỉ buổi Chiều" || schoolShift === "Sáng & Chiều" || schoolShift === "Thứ 7 (Học cả ngày)") {
+      fixedBlocks.push({ start: 13 * 60, end: 17 * 60, title: "Học trên trường (Ca Chiều)", desc: "Tập trung học trên lớp", type: "school" });
     }
 
-    // 3. TRƯA: 11:00 - 13:00 (Tất cả kịch bản)
-    schedule.push({ time: "11:00 - 12:00", title: "Ăn trưa", desc: "Ăn đủ chất, không ăn quá no • Tránh đồ chiên nhiều dầu", type: "rest" });
-    schedule.push({ time: "12:00 - 13:00", title: "Nghỉ trưa", desc: "Ngủ 20-30 phút bắt buộc để não hồi phục • Đặt báo thức", type: "rest" });
+    fixedBlocks.sort((a, b) => a.start - b.start);
 
-    // 4. BUỔI CHIỀU: 13:00 - 17:00
-    if (schoolShift === "Chỉ buổi Chiều" || isFullDay) {
-      // Có trường buổi chiều
-      schedule.push({ time: "13:00 - 17:00", title: "Học trên trường (Ca Chiều)", desc: "Tập trung và làm bài tập ngay tại lớp khi rảnh", type: "school" });
-    } else if (schoolShift === "Chỉ buổi Sáng") {
-      // Chiều rảnh (sáng đi học) → Aptis Block 1 + 2 + Bài tập
-      schedule.push({ time: "13:00 - 14:30", title: "Block 1: Luyện Nghe & Đọc Hiểu", desc: "90 phút Deep Work • Buổi chiều yên tĩnh, tập trung cao", type: "aptis" });
-      schedule.push({ time: "14:30 - 14:45", title: "Nghỉ giải lao", desc: "15 phút • Đứng dậy đi lại, giãn cơ", type: "rest" });
-      schedule.push({ time: "14:45 - 15:45", title: "Block 2: Từ Vựng Trắc Nghiệm", desc: "60 phút nạp từ vựng mới liên tục", type: "aptis" });
-      schedule.push({ time: "15:45 - 16:00", title: "Nghỉ giải lao", desc: "15 phút • Uống nước, ăn nhẹ nếu đói", type: "rest" });
-      schedule.push({ time: "16:00 - 17:00", title: "Làm bài tập trường", desc: "60 phút • Hoàn thành bài tập về nhà, chuẩn bị bài ngày mai", type: "school" });
-    } else {
-      // Nghỉ nhà (sáng đã học Block 1 + 2) → Block 3
-      schedule.push({ time: "13:00 - 15:00", title: "Block 3: Luyện Nói & Viết", desc: "120 phút Output • Luyện Speaking + Writing phản xạ", type: "aptis" });
-      schedule.push({ time: "15:00 - 15:15", title: "Nghỉ giải lao", desc: "15 phút • Thư giãn sau block dài nhất", type: "rest" });
-      schedule.push({ time: "15:15 - 17:00", title: "Tự học / Làm bài tập trường", desc: "105 phút • Bài tập về nhà, ôn tập, hoặc code dự án IT", type: "school" });
+    const ft = (mins: number) => {
+      let h = Math.floor(mins / 60) % 24;
+      let m = mins % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    };
+
+    let remainingAptisBlocks = planningForTomorrow ? [...INITIAL_BLOCKS] : blocks.filter((b, i) => !b.completed && i >= activeBlockIndex);
+    let remainingUrgentCycles = planningForTomorrow && urgentTask ? urgentTaskCycles : 0;
+    let firstBlockAptisTime = (!planningForTomorrow && timeLeft > 0) ? Math.ceil(timeLeft / 60) : 0;
+
+    let END_OF_DAY = 23 * 60 + 45;
+
+    while (currentMins < END_OF_DAY) {
+      const nextFixed = fixedBlocks.find(b => b.start < b.end && b.end > currentMins);
+
+      if (nextFixed && currentMins >= nextFixed.start) {
+        schedule.push({
+          time: `${ft(currentMins)} - ${ft(nextFixed.end)}`,
+          title: nextFixed.title,
+          desc: nextFixed.desc,
+          type: nextFixed.type as any
+        });
+        currentMins = nextFixed.end;
+        continue;
+      }
+
+      const boundary = nextFixed ? nextFixed.start : END_OF_DAY;
+      let availableMins = boundary - currentMins;
+
+      if (availableMins <= 0) break;
+
+      if (availableMins >= 105) {
+        let studyDuration = 90;
+        let title = "Tự học / Ôn tập";
+        let desc = "Làm bài tập hoặc nghiên cứu thêm";
+        let type = "school";
+
+        if (remainingUrgentCycles > 0) {
+          title = `[GẤP] ${urgentTask}`;
+          desc = "Công việc khẩn ngày mai";
+          type = "urgent";
+          remainingUrgentCycles--;
+        } else if (remainingAptisBlocks.length > 0) {
+          let b = remainingAptisBlocks[0];
+          title = b.title;
+          desc = "Chu kỳ tập trung sâu Aptis Intensive";
+          type = "aptis";
+          studyDuration = (firstBlockAptisTime > 0) ? firstBlockAptisTime : 90;
+          firstBlockAptisTime = 0;
+          remainingAptisBlocks.shift();
+        }
+
+        schedule.push({
+          time: `${ft(currentMins)} - ${ft(currentMins + studyDuration)}`,
+          title, desc, type: type as any
+        });
+        currentMins += studyDuration;
+
+        schedule.push({
+          time: `${ft(currentMins)} - ${ft(currentMins + 15)}`,
+          title: "Nghỉ giải lao (15 phút)",
+          desc: "Đứng dậy đi lại, uống nước, giãn cơ",
+          type: "rest"
+        });
+        currentMins += 15;
+      } else if (availableMins >= 45) {
+        let studyMins = availableMins >= 60 ? availableMins - 15 : availableMins;
+        let breakMins = availableMins - studyMins;
+
+        let title = "Tự học linh hoạt";
+        let type = "school";
+
+        if (remainingUrgentCycles > 0) {
+          title = `[GẤP] ${urgentTask} (Rút ngắn)`;
+          type = "urgent";
+          remainingUrgentCycles = 0;
+        } else if (remainingAptisBlocks.length > 0) {
+          title = `${remainingAptisBlocks[0].title} (Rút ngắn)`;
+          type = "aptis";
+          remainingAptisBlocks.shift();
+        }
+
+        schedule.push({
+          time: `${ft(currentMins)} - ${ft(currentMins + studyMins)}`,
+          title, desc: `${studyMins} phút • Khung thời gian hẹp nên linh động`, type: type as any
+        });
+        currentMins += studyMins;
+
+        if (breakMins > 0) {
+          schedule.push({
+            time: `${ft(currentMins)} - ${ft(currentMins + breakMins)}`,
+            title: "Giải lao nhẹ", desc: `${breakMins} phút ngắn ngủi`, type: "rest"
+          });
+          currentMins += breakMins;
+        }
+      } else {
+        schedule.push({
+          time: `${ft(currentMins)} - ${ft(boundary)}`,
+          title: "Thời gian trống lẻ tẻ", desc: `${availableMins} phút • Nghe nhạc, thư thái chờ lịch giao`, type: "rest"
+        });
+        currentMins += availableMins;
+      }
     }
 
-    // 5. TỐI: 17:00 - 19:00 (Tất cả kịch bản)
-    schedule.push({ time: "17:00 - 18:00", title: "Thể dục & Tắm rửa", desc: "Vận động 30-45p (chạy bộ, tập gym, đạp xe) • Tắm sạch sẽ", type: "rest" });
-    schedule.push({ time: "18:00 - 19:00", title: "Ăn tối & Nghỉ ngơi", desc: "Ăn tối từ tốn • Nghỉ ngơi nhẹ trước khi học", type: "rest" });
-
-    // 6. BUỔI TỐI: 19:00 - 23:45 (285 phút khả dụng)
-    if (isFullDay) {
-      // Cả ngày đi học (Sáng & Chiều / Thứ 7) → Tối phải cày hết 3 block Aptis
-      // 19:00-23:30 = 270 phút. Aptis = 270 phút. Rất chặt!
-      if (urgentTask) {
-        // Có bài tập gấp: ép urgent 45p + rút gọn Block 3
-        schedule.push({ time: "19:00 - 19:45", title: `Bài tập GẤP: ${urgentTask}`, desc: "45 phút • Xử lý deadline khẩn cấp trước", type: "urgent" });
-        schedule.push({ time: "19:45 - 21:15", title: "Block 1: Luyện Nghe & Đọc Hiểu", desc: "90 phút Deep Work • Tập trung tối đa", type: "aptis" });
-        schedule.push({ time: "21:15 - 21:25", title: "Nghỉ giải lao", desc: "10 phút • Đi lại nhanh, uống nước", type: "rest" });
-        schedule.push({ time: "21:25 - 22:25", title: "Block 2: Từ Vựng Trắc Nghiệm", desc: "60 phút nạp từ vựng", type: "aptis" });
-        schedule.push({ time: "22:25 - 23:30", title: "Block 3: Luyện Nói & Viết (Rút gọn)", desc: "65 phút Output • Rút gọn, tập trung Writing", type: "aptis" });
-      } else {
-        // Không urgent: 3 block đầy đủ + micro-break
-        schedule.push({ time: "19:00 - 20:30", title: "Block 1: Luyện Nghe & Đọc Hiểu", desc: "90 phút Deep Work • Tập trung cao nhất buổi tối", type: "aptis" });
-        schedule.push({ time: "20:30 - 20:40", title: "Nghỉ giải lao", desc: "10 phút • Đi lại, uống nước, KHÔNG lướt điện thoại", type: "rest" });
-        schedule.push({ time: "20:40 - 21:40", title: "Block 2: Từ Vựng Trắc Nghiệm", desc: "60 phút nạp từ vựng chuyên ngành", type: "aptis" });
-        schedule.push({ time: "21:40 - 21:50", title: "Nghỉ giải lao", desc: "10 phút • Giãn mắt, đi lại nhanh", type: "rest" });
-        schedule.push({ time: "21:50 - 23:30", title: "Block 3: Luyện Nói & Viết", desc: "100 phút Output • Speaking + Writing (rút gọn 20p để có break)", type: "aptis" });
+    if (currentMins >= END_OF_DAY || planningForTomorrow) {
+      if (!schedule.find(s => s.title.includes("Ngủ sâu"))) {
+        schedule.push({
+          time: "23:45 - 06:00",
+          title: "Ngủ sâu (Bảo vệ tuyệt đối)",
+          desc: "Lên giường tắt đèn đúng giờ, đảm bảo sức khoẻ hoàn hảo",
+          type: "rest"
+        });
       }
-      schedule.push({ time: "23:30 - 23:45", title: "Vệ sinh cá nhân & Chuẩn bị ngủ", desc: "15 phút • Đánh răng, rửa mặt, tắt đèn", type: "rest" });
-    } else if (schoolShift === "Chỉ buổi Sáng") {
-      // Sáng trường + Chiều Block 1,2 → Tối chỉ cần Block 3 + chu kỳ ôn tập
-      if (urgentTask) {
-        schedule.push({ time: "19:00 - 20:00", title: `Bài tập GẤP: ${urgentTask}`, desc: "60 phút • Xử lý deadline trường lớp khẩn cấp", type: "urgent" });
-        schedule.push({ time: "20:00 - 20:15", title: "Nghỉ giải lao", desc: "15 phút • Đi lại, uống nước", type: "rest" });
-        schedule.push({ time: "20:15 - 22:15", title: "Block 3: Luyện Nói & Viết", desc: "120 phút Output • Luyện Speaking + Writing phản xạ", type: "aptis" });
-      } else {
-        schedule.push({ time: "19:00 - 21:00", title: "Block 3: Luyện Nói & Viết", desc: "120 phút Output • Luyện Speaking + Writing phản xạ", type: "aptis" });
-        schedule.push({ time: "21:00 - 21:15", title: "Nghỉ giải lao", desc: "15 phút • Đi lại, giãn cơ, thư giãn mắt", type: "rest" });
-        schedule.push({ time: "21:15 - 22:00", title: "Ôn bài trường / Tự học", desc: "45 phút • Ôn lại bài đã học, chuẩn bị cho ngày mai", type: "school" });
-      }
-      schedule.push({ time: "22:00 - 22:15", title: "Nghỉ giải lao", desc: "15 phút • Giãn cơ, thư giãn", type: "rest" });
-      schedule.push({ time: "22:15 - 23:15", title: "Thư giãn tự do", desc: "60 phút • Đọc sách, nghe nhạc, xem phim • KHÔNG học", type: "rest" });
-      schedule.push({ time: "23:15 - 23:30", title: "Vệ sinh cá nhân", desc: "15 phút • Đánh răng, rửa mặt", type: "rest" });
-      schedule.push({ time: "23:30 - 23:45", title: "Night Plan & Chuẩn bị ngủ", desc: "15 phút • Lên kế hoạch ngày mai, tắt đèn", type: "rest" });
-    } else if (schoolShift === "Chỉ buổi Chiều") {
-      // Sáng Block 1,2 + Chiều trường → Tối Block 3 + chu kỳ ôn tập
-      if (urgentTask) {
-        schedule.push({ time: "19:00 - 20:00", title: `Bài tập GẤP: ${urgentTask}`, desc: "60 phút • Xử lý deadline khẩn cấp", type: "urgent" });
-        schedule.push({ time: "20:00 - 20:15", title: "Nghỉ giải lao", desc: "15 phút • Đi lại, uống nước", type: "rest" });
-        schedule.push({ time: "20:15 - 22:15", title: "Block 3: Luyện Nói & Viết", desc: "120 phút Output • Speaking + Writing cuối ngày", type: "aptis" });
-      } else {
-        schedule.push({ time: "19:00 - 21:00", title: "Block 3: Luyện Nói & Viết", desc: "120 phút Output • Luyện Speaking + Writing phản xạ", type: "aptis" });
-        schedule.push({ time: "21:00 - 21:15", title: "Nghỉ giải lao", desc: "15 phút • Đi lại, giãn cơ, uống nước", type: "rest" });
-        schedule.push({ time: "21:15 - 22:00", title: "Ôn bài trường / Tự học", desc: "45 phút • Ôn lại bài đã học, chuẩn bị ngày mai", type: "school" });
-      }
-      schedule.push({ time: "22:00 - 22:15", title: "Nghỉ giải lao", desc: "15 phút • Giãn cơ, thư giãn", type: "rest" });
-      schedule.push({ time: "22:15 - 23:15", title: "Thư giãn tự do", desc: "60 phút • Đọc sách, nghe nhạc • Để não xả hơi hoàn toàn", type: "rest" });
-      schedule.push({ time: "23:15 - 23:30", title: "Vệ sinh cá nhân", desc: "15 phút • Đánh răng, rửa mặt", type: "rest" });
-      schedule.push({ time: "23:30 - 23:45", title: "Night Plan & Chuẩn bị ngủ", desc: "15 phút • Lên kế hoạch ngày mai, tắt đèn", type: "rest" });
-    } else {
-      // Nghỉ nhà: Sáng Block 1,2 + Chiều Block 3 → Tối: thêm chu kỳ ôn tập
-      if (urgentTask) {
-        schedule.push({ time: "19:00 - 20:00", title: `Bài tập GẤP: ${urgentTask}`, desc: "60 phút • Xử lý deadline khẩn cấp", type: "urgent" });
-        schedule.push({ time: "20:00 - 20:15", title: "Nghỉ giải lao", desc: "15 phút • Đi lại, uống nước", type: "rest" });
-        schedule.push({ time: "20:15 - 21:15", title: "Ôn tập tổng hợp Aptis", desc: "60 phút • Xem lại từ vựng, ôn lại lỗi sai", type: "aptis" });
-        schedule.push({ time: "21:15 - 21:30", title: "Nghỉ giải lao", desc: "15 phút • Giãn cơ, thư giãn mắt", type: "rest" });
-        schedule.push({ time: "21:30 - 22:15", title: "Tự học / Làm bài tập trường", desc: "45 phút • Bài tập về nhà, code dự án", type: "school" });
-      } else {
-        schedule.push({ time: "19:00 - 20:00", title: "Làm bài tập trường / Tự học IT", desc: "60 phút • Bài tập về nhà, code dự án phụ", type: "school" });
-        schedule.push({ time: "20:00 - 20:15", title: "Nghỉ giải lao", desc: "15 phút • Đi lại, uống nước, giãn cơ", type: "rest" });
-        schedule.push({ time: "20:15 - 21:15", title: "Ôn tập tổng hợp Aptis", desc: "60 phút • Xem lại từ vựng, luyện thêm đề nếu muốn", type: "aptis" });
-        schedule.push({ time: "21:15 - 21:30", title: "Nghỉ giải lao", desc: "15 phút • Giãn mắt, thư giãn", type: "rest" });
-        schedule.push({ time: "21:30 - 22:15", title: "Đọc sách / Nâng cao kiến thức", desc: "45 phút • Đọc tài liệu tiếng Anh, sách chuyên ngành", type: "school" });
-      }
-      schedule.push({ time: "22:15 - 23:15", title: "Thư giãn tự do", desc: "60 phút • Đọc sách, nghe nhạc, giải trí nhẹ • KHÔNG học nữa", type: "rest" });
-      schedule.push({ time: "23:15 - 23:30", title: "Vệ sinh cá nhân", desc: "15 phút • Đánh răng, rửa mặt", type: "rest" });
-      schedule.push({ time: "23:30 - 23:45", title: "Night Plan & Chuẩn bị ngủ", desc: "15 phút • Lên kế hoạch ngày mai, tắt đèn", type: "rest" });
     }
 
-    // 7. NGỦ (Tất cả kịch bản)
-    schedule.push({ time: "23:45 - 06:00", title: "Ngủ sâu", desc: "4 chu kỳ × 90 phút + 15p ru ngủ = 6h15 ngủ nước rút", type: "rest" });
+    return { schedule, unassignedBlocks: remainingAptisBlocks };
+  };
 
+  const generateSchedule = () => {
+    const { schedule } = generateDynamicSchedule(6 * 60, true);
     setGeneratedSchedule(schedule);
     setPlanStep(3);
   };
@@ -570,491 +579,44 @@ export default function AptisIntensivePage() {
     speakAnnounce("Đã nhận lệnh về nhà. Hệ thống tái dàn trải quỹ thời gian theo chu kỳ học khoa học thành công.");
 
     const now = new Date();
-    let currH = now.getHours();
-    let currM = now.getMinutes();
+    let currentMins = now.getHours() * 60 + now.getMinutes();
 
-    const ft = (hr: number, mn: number) => {
-      let dHr = hr; let dMn = mn;
-      if (dMn >= 60) { dHr += Math.floor(dMn / 60); dMn %= 60; }
-      if (dHr >= 24) dHr %= 24;
-      return `${String(dHr).padStart(2, '0')}:${String(dMn).padStart(2, '0')}`;
-    };
-    const addMins = (hr: number, mn: number, minsToAdd: number) => {
-      return [hr + Math.floor((mn + minsToAdd) / 60), (mn + minsToAdd) % 60];
-    };
-    const toTotal = (hr: number, mn: number) => hr * 60 + mn;
+    const { schedule, unassignedBlocks } = generateDynamicSchedule(currentMins, false);
 
-    const bedStr = generatedSchedule.find(s => s.time.includes("Sáng mai"))?.time.split(" - ")[0];
-    let bedH = 23, bedM = 45;
-    if (bedStr) {
-      bedH = parseInt(bedStr.split(":")[0]);
-      bedM = parseInt(bedStr.split(":")[1]);
-    }
-
-    let currTotal = currH * 60 + currM;
-    let bedTotal = bedH * 60 + bedM;
-    if (bedTotal < currTotal && bedTotal < 12 * 60) {
-      bedTotal += 24 * 60;
-    }
-
-    let remainingAptisMins = Math.ceil(timeLeft / 60);
-    for (let i = activeBlockIndex + 1; i < blocks.length; i++) {
-      remainingAptisMins += blocks[i].durationMins;
-    }
-
-    let remainingRealMins = bedTotal - currTotal;
-    let newSchedule: ScheduleItem[] = [];
-
+    // If there were any unassigned blocks due to lack of time, we mark them as completed to skip them
     let updatedBlocks = [...blocks];
-    let newActiveIndex = activeBlockIndex;
-    let newTimeLeft = timeLeft;
-
-    // === HÀM TÍNH THỜI GIAN NGHỈ THÔNG MINH ===
-    // Dựa trên số chu kỳ liên tiếp đã hoàn thành & độ dài block
-    const getSmartBreak = (blockDurationMins: number, consecutiveCycles: number): { mins: number; desc: string } => {
-      // Sau block ngắn (≤45p) → nghỉ 5 phút
-      if (blockDurationMins <= 45) {
-        return { mins: 5, desc: "5 phút • Uống nước, đi lại nhanh" };
-      }
-      // Sau block vừa (46-90p) → nghỉ 15 phút
-      if (blockDurationMins <= 90) {
-        // Nhưng nếu đã học 3+ chu kỳ liên tiếp → tăng lên 30 phút
-        if (consecutiveCycles >= 3) {
-          return { mins: 30, desc: "30 phút • Nghỉ dài sau 3 chu kỳ liên tiếp, ăn nhẹ, thư giãn" };
-        }
-        return { mins: 15, desc: "15 phút • Đi lại, giãn cơ, uống nước, KHÔNG nhìn màn hình" };
-      }
-      // Sau block dài (>90p) → nghỉ 30 phút
-      // Nhưng nếu đã học 3+ chu kỳ → cho nghỉ 1 tiếng
-      if (consecutiveCycles >= 3) {
-        return { mins: 60, desc: "60 phút • Nghỉ dài hồi phục sau chuỗi học marathon, ăn nhẹ, vận động" };
-      }
-      return { mins: 30, desc: "30 phút • Nghỉ giải lao lớn, thư giãn não bộ, ăn nhẹ nếu đói" };
-    };
-
-    // === KHUNG GIỜ CỐ ĐỊNH: 17:00 - 19:00 (Tắm rửa + Ăn tối) ===
-    const FIXED_START = 17 * 60; // 17:00
-    const FIXED_MID = 18 * 60;   // 18:00
-    const FIXED_END = 19 * 60;   // 19:00
-
-    // Helper: chèn block cố định 17:00-19:00 nếu cần
-    const insertFixedDinnerBlock = (schedule: ScheduleItem[], startTotal: number): [number, number] => {
-      // Nếu đang trước 17:00 hoặc đã qua 19:00 → không cần chèn
-      if (startTotal >= FIXED_END || startTotal < FIXED_START) return [Math.floor(startTotal / 60), startTotal % 60];
-
-      // Đang trong khoảng 17:00-19:00 → chèn phần còn lại
-      if (startTotal < FIXED_MID) {
-        const bathEndH = Math.floor(FIXED_MID / 60);
-        const bathEndM = FIXED_MID % 60;
-        schedule.push({
-          time: `${ft(Math.floor(startTotal / 60), startTotal % 60)} - ${ft(bathEndH, bathEndM)}`,
-          title: "Thể dục & Tắm rửa",
-          desc: `${FIXED_MID - startTotal} phút • Vận động, tắm sạch sẽ`,
-          type: "rest"
-        });
-        startTotal = FIXED_MID;
-      }
-      if (startTotal < FIXED_END) {
-        const dinnerEndH = Math.floor(FIXED_END / 60);
-        const dinnerEndM = FIXED_END % 60;
-        schedule.push({
-          time: `${ft(Math.floor(startTotal / 60), startTotal % 60)} - ${ft(dinnerEndH, dinnerEndM)}`,
-          title: "Ăn tối & Nghỉ ngơi",
-          desc: `${FIXED_END - startTotal} phút • Ăn tối từ tốn, nghỉ ngơi nhẹ`,
-          type: "rest"
-        });
-        startTotal = FIXED_END;
-      }
-      return [Math.floor(startTotal / 60), startTotal % 60];
-    };
-
-    // Helper: tính thời gian học khả dụng (trừ đi khung giờ cố định 17-19h)
-    const getAvailableStudyMins = (fromTotal: number, toTotal: number): number => {
-      let available = toTotal - fromTotal;
-      // Nếu khoảng thời gian chứa khung 17:00-19:00 → trừ đi
-      const overlapStart = Math.max(fromTotal, FIXED_START);
-      const overlapEnd = Math.min(toTotal, FIXED_END);
-      if (overlapStart < overlapEnd) {
-        available -= (overlapEnd - overlapStart);
-      }
-      return Math.max(0, available);
-    };
-
-    if (remainingRealMins > remainingAptisMins) {
-      // === CÒN DƯ THỜI GIAN SAU APTIS → CHIA CHU KỲ HỌC + NGHỈ ===
-      let consecutiveCycles = 0;
-
-      // Phần 1: Xếp các block Aptis còn lại + break thông minh
-      for (let i = activeBlockIndex; i < blocks.length; i++) {
-        let bDuration = (i === activeBlockIndex) ? Math.ceil(timeLeft / 60) : blocks[i].durationMins;
-
-        // Kiểm tra nếu block này sẽ chạm vào khung 17:00-19:00
-        let blockStart = toTotal(currH, currM);
-        let blockEnd = blockStart + bDuration;
-
-        if (blockStart < FIXED_START && blockEnd > FIXED_START) {
-          // Block sẽ xuyên qua 17:00 → cắt đôi
-          const firstHalf = FIXED_START - blockStart;
-          if (firstHalf > 0) {
-            newSchedule.push({
-              time: `${ft(currH, currM)} - 17:00`,
-              title: `Tiếp Tục: ${blocks[i].title}`,
-              desc: `${firstHalf} phút • Học đến giờ tắm & ăn tối`,
-              type: "aptis"
-            });
-            [currH, currM] = [17, 0];
-          }
-
-          // Chèn khung cố định 17:00-19:00
-          [currH, currM] = insertFixedDinnerBlock(newSchedule, FIXED_START);
-          consecutiveCycles = 0; // Reset sau nghỉ dài
-
-          // Phần còn lại của block sau 19:00
-          const secondHalf = bDuration - firstHalf;
-          if (secondHalf > 0) {
-            newSchedule.push({
-              time: `${ft(currH, currM)} - ${ft(currH, currM + secondHalf)}`,
-              title: `Tiếp Tục: ${blocks[i].title}`,
-              desc: `${secondHalf} phút • Tiếp tục sau ăn tối`,
-              type: "aptis"
-            });
-            [currH, currM] = addMins(currH, currM, secondHalf);
-          }
-        } else if (blockStart >= FIXED_START && blockStart < FIXED_END) {
-          // Đang trong khung 17:00-19:00 → chèn dinner trước
-          [currH, currM] = insertFixedDinnerBlock(newSchedule, blockStart);
-          consecutiveCycles = 0;
-
-          // Rồi xếp block sau 19:00
-          newSchedule.push({
-            time: `${ft(currH, currM)} - ${ft(currH, currM + bDuration)}`,
-            title: `Tiếp Tục: ${blocks[i].title}`,
-            desc: "Khối thời gian linh hoạt",
-            type: "aptis"
-          });
-          [currH, currM] = addMins(currH, currM, bDuration);
-        } else {
-          // Block nằm hoàn toàn ngoài khung 17-19h → xếp bình thường
-          newSchedule.push({
-            time: `${ft(currH, currM)} - ${ft(currH, currM + bDuration)}`,
-            title: `Tiếp Tục: ${blocks[i].title}`,
-            desc: "Khối thời gian linh hoạt",
-            type: "aptis"
-          });
-          [currH, currM] = addMins(currH, currM, bDuration);
-        }
-        consecutiveCycles++;
-
-        // Break giữa các block Aptis
-        if (i < blocks.length - 1) {
-          // Kiểm tra nếu break rơi vào khung 17-19h → thay bằng dinner
-          let breakStart = toTotal(currH, currM);
-          if (breakStart >= FIXED_START && breakStart < FIXED_END) {
-            [currH, currM] = insertFixedDinnerBlock(newSchedule, breakStart);
-            consecutiveCycles = 0;
-          } else {
-            const brk = getSmartBreak(bDuration, consecutiveCycles);
-            // Nếu break sẽ chạm vào 17:00 → cắt ngắn break + chèn dinner
-            let brkEnd = breakStart + brk.mins;
-            if (breakStart < FIXED_START && brkEnd > FIXED_START) {
-              const shortBreak = FIXED_START - breakStart;
-              if (shortBreak >= 5) {
-                newSchedule.push({
-                  time: `${ft(currH, currM)} - 17:00`,
-                  title: "Nghỉ giải lao",
-                  desc: `${shortBreak} phút • Uống nước, đi lại`,
-                  type: "rest"
-                });
-              }
-              [currH, currM] = [17, 0];
-              [currH, currM] = insertFixedDinnerBlock(newSchedule, FIXED_START);
-              consecutiveCycles = 0;
-            } else {
-              newSchedule.push({
-                time: `${ft(currH, currM)} - ${ft(currH, currM + brk.mins)}`,
-                title: "Nghỉ giải lao",
-                desc: brk.desc,
-                type: "rest"
-              });
-              [currH, currM] = addMins(currH, currM, brk.mins);
-              if (brk.mins >= 30) consecutiveCycles = 0;
-            }
-          }
+    if (unassignedBlocks.length > 0) {
+      let droppedCount = 0;
+      for (let block of unassignedBlocks) {
+        let idx = updatedBlocks.findIndex(b => b.id === block.id);
+        if (idx !== -1) {
+          updatedBlocks[idx].completed = true;
+          droppedCount++;
         }
       }
-
-      // Phần 2: Thời gian dư → chia thành chu kỳ "Tự học/Ôn tập" + break
-      let cTot = toTotal(currH, currM);
-
-      // Chèn khung cố định nếu chưa qua
-      if (cTot >= FIXED_START && cTot < FIXED_END) {
-        [currH, currM] = insertFixedDinnerBlock(newSchedule, cTot);
-        consecutiveCycles = 0;
-        cTot = toTotal(currH, currM);
-      }
-
-      let freeTimeMins = bedTotal - cTot;
-
-      if (freeTimeMins > 0) {
-        // Break sau khối Aptis cuối trước khi vào chu kỳ phụ
-        const postAptisBreak = getSmartBreak(blocks[blocks.length - 1]?.durationMins || 60, consecutiveCycles);
-        if (freeTimeMins > postAptisBreak.mins + 30) {
-          // Kiểm tra break có chạm 17:00-19:00 không
-          let breakStart = toTotal(currH, currM);
-          if (breakStart >= FIXED_START && breakStart < FIXED_END) {
-            [currH, currM] = insertFixedDinnerBlock(newSchedule, breakStart);
-            consecutiveCycles = 0;
-          } else {
-            newSchedule.push({
-              time: `${ft(currH, currM)} - ${ft(currH, currM + postAptisBreak.mins)}`,
-              title: "Nghỉ giải lao",
-              desc: postAptisBreak.desc,
-              type: "rest"
-            });
-            [currH, currM] = addMins(currH, currM, postAptisBreak.mins);
-            if (postAptisBreak.mins >= 30) consecutiveCycles = 0;
-          }
-          freeTimeMins = bedTotal - toTotal(currH, currM);
-        }
-
-        // Dành tối đa 90 phút cuối cho "Thư giãn tự do" trước ngủ
-        const windDownMins = 15;
-        const availableForStudy = getAvailableStudyMins(toTotal(currH, currM), bedTotal);
-        const maxRelaxMins = Math.min(90, Math.max(30, Math.floor(availableForStudy * 0.3)));
-        const timeForStudyCycles = availableForStudy - maxRelaxMins - windDownMins;
-
-        if (timeForStudyCycles >= 30) {
-          let studyTimeLeft = timeForStudyCycles;
-          let cycleCount = 0;
-          const studyCycleDuration = 45;
-
-          const studyTopics = [
-            { title: "Ôn tập tổng hợp Aptis", desc: "Xem lại từ vựng, ôn lại lỗi sai, luyện thêm đề" },
-            { title: "Làm bài tập trường / Tự học IT", desc: "Bài tập về nhà, code dự án, hoặc ôn bài ngày mai" },
-            { title: "Đọc sách / Nâng cao kiến thức", desc: "Đọc tài liệu tiếng Anh, sách chuyên ngành" },
-            { title: "Luyện thêm đề Aptis", desc: "Làm thêm bài tập Reading/Listening nếu còn năng lượng" },
-          ];
-
-          while (studyTimeLeft >= 30) {
-            // Kiểm tra nếu đang trong khung 17-19h → chèn dinner trước
-            let nowTotal = toTotal(currH, currM);
-            if (nowTotal >= FIXED_START && nowTotal < FIXED_END) {
-              [currH, currM] = insertFixedDinnerBlock(newSchedule, nowTotal);
-              consecutiveCycles = 0;
-              nowTotal = toTotal(currH, currM);
-            }
-
-            const thisCycleDuration = Math.min(studyCycleDuration, studyTimeLeft);
-            let cycleEnd = nowTotal + thisCycleDuration;
-
-            // Nếu chu kỳ xuyên qua 17:00 → cắt đôi
-            if (nowTotal < FIXED_START && cycleEnd > FIXED_START) {
-              const firstHalf = FIXED_START - nowTotal;
-              const topic = studyTopics[cycleCount % studyTopics.length];
-              if (firstHalf >= 15) {
-                newSchedule.push({
-                  time: `${ft(currH, currM)} - 17:00`,
-                  title: topic.title,
-                  desc: `${firstHalf} phút • ${topic.desc}`,
-                  type: cycleCount % 2 === 0 ? "aptis" : "school"
-                });
-                studyTimeLeft -= firstHalf;
-                cycleCount++;
-              }
-              [currH, currM] = [17, 0];
-              [currH, currM] = insertFixedDinnerBlock(newSchedule, FIXED_START);
-              consecutiveCycles = 0;
-              continue; // Re-enter loop to schedule remaining study time
-            }
-
-            const topic = studyTopics[cycleCount % studyTopics.length];
-            newSchedule.push({
-              time: `${ft(currH, currM)} - ${ft(currH, currM + thisCycleDuration)}`,
-              title: topic.title,
-              desc: `${thisCycleDuration} phút • ${topic.desc}`,
-              type: cycleCount % 2 === 0 ? "aptis" : "school"
-            });
-            [currH, currM] = addMins(currH, currM, thisCycleDuration);
-            studyTimeLeft -= thisCycleDuration;
-            cycleCount++;
-            consecutiveCycles++;
-
-            // Break giữa các chu kỳ tự học
-            if (studyTimeLeft >= 30) {
-              let breakStartTot = toTotal(currH, currM);
-              if (breakStartTot >= FIXED_START && breakStartTot < FIXED_END) {
-                [currH, currM] = insertFixedDinnerBlock(newSchedule, breakStartTot);
-                consecutiveCycles = 0;
-              } else {
-                const brk = getSmartBreak(thisCycleDuration, consecutiveCycles);
-                const actualBreak = Math.min(brk.mins, studyTimeLeft - 30);
-                if (actualBreak >= 5) {
-                  newSchedule.push({
-                    time: `${ft(currH, currM)} - ${ft(currH, currM + actualBreak)}`,
-                    title: "Nghỉ giải lao",
-                    desc: actualBreak >= 30 ? `${actualBreak} phút • Nghỉ dài, thư giãn` : actualBreak >= 15 ? `${actualBreak} phút • Giãn cơ, uống nước` : `${actualBreak} phút • Uống nước, đi lại`,
-                    type: "rest"
-                  });
-                  [currH, currM] = addMins(currH, currM, actualBreak);
-                  studyTimeLeft -= actualBreak;
-                  if (actualBreak >= 30) consecutiveCycles = 0;
-                }
-              }
-            }
-          }
-        }
-
-        // Chèn dinner nếu chưa qua (trường hợp study cycles kết thúc trước 17:00)
-        cTot = toTotal(currH, currM);
-        if (cTot >= FIXED_START && cTot < FIXED_END) {
-          [currH, currM] = insertFixedDinnerBlock(newSchedule, cTot);
-        }
-
-        // Thêm block "Thư giãn tự do" trước ngủ (tối đa 90 phút)
-        cTot = toTotal(currH, currM);
-        const relaxEnd = bedTotal - windDownMins;
-        const actualRelaxMins = relaxEnd - cTot;
-
-        if (actualRelaxMins > 0) {
-          const relaxEndH = Math.floor(relaxEnd / 60) % 24;
-          const relaxEndM = relaxEnd % 60;
-          newSchedule.push({
-            time: `${ft(currH, currM)} - ${ft(relaxEndH, relaxEndM)}`,
-            title: "Thư giãn tự do",
-            desc: `${actualRelaxMins} phút • Đọc sách, nghe nhạc, xem phim nhẹ • KHÔNG học`,
-            type: "rest"
-          });
-          [currH, currM] = [relaxEndH, relaxEndM];
-        }
-
-        // Vệ sinh cá nhân trước ngủ
-        if (windDownMins > 0) {
-          newSchedule.push({
-            time: `${ft(currH, currM)} - ${ft(bedH, bedM)}`,
-            title: "Vệ sinh cá nhân & Chuẩn bị ngủ",
-            desc: `${windDownMins} phút • Đánh răng, rửa mặt, tắt đèn`,
-            type: "rest"
-          });
-        }
-      }
-    } else {
-      // === KHÔNG ĐỦ THỜI GIAN → ÉP TIẾN ĐỘ ===
-      // Vẫn giữ khung 17-19h nếu chưa qua
-      let availableMins = getAvailableStudyMins(currTotal, bedTotal);
-      let droppedBlocksCount = 0;
-
-      for (let i = activeBlockIndex; i < blocks.length; i++) {
-        // Kiểm tra nếu đang trong khung 17-19h → chèn dinner trước
-        let nowTot = toTotal(currH, currM);
-        if (nowTot >= FIXED_START && nowTot < FIXED_END) {
-          [currH, currM] = insertFixedDinnerBlock(newSchedule, nowTot);
-          nowTot = toTotal(currH, currM);
-        }
-
-        let bDuration = (i === activeBlockIndex) ? Math.ceil(timeLeft / 60) : blocks[i].durationMins;
-
-        if (availableMins - bDuration >= 0) {
-          // Kiểm tra xuyên qua 17:00
-          let blockEnd = nowTot + bDuration;
-          if (nowTot < FIXED_START && blockEnd > FIXED_START) {
-            const firstHalf = FIXED_START - nowTot;
-            newSchedule.push({
-              time: `${ft(currH, currM)} - 17:00`,
-              title: `Ép tiến độ: ${blocks[i].title}`,
-              desc: `${firstHalf} phút • Học đến giờ ăn tối`,
-              type: "urgent"
-            });
-            [currH, currM] = [17, 0];
-            [currH, currM] = insertFixedDinnerBlock(newSchedule, FIXED_START);
-            const secondHalf = bDuration - firstHalf;
-            if (secondHalf > 0) {
-              newSchedule.push({
-                time: `${ft(currH, currM)} - ${ft(currH, currM + secondHalf)}`,
-                title: `Ép tiến độ: ${blocks[i].title}`,
-                desc: `${secondHalf} phút • Tiếp tục sau ăn tối`,
-                type: "urgent"
-              });
-              [currH, currM] = addMins(currH, currM, secondHalf);
-            }
-          } else {
-            newSchedule.push({
-              time: `${ft(currH, currM)} - ${ft(currH, currM + bDuration)}`,
-              title: `Ép tiến độ: ${blocks[i].title}`,
-              desc: "Chạy đua thời gian • Không có break",
-              type: "urgent"
-            });
-            [currH, currM] = addMins(currH, currM, bDuration);
-          }
-          availableMins -= bDuration;
-
-          if (i < blocks.length - 1 && availableMins >= 5) {
-            newSchedule.push({
-              time: `${ft(currH, currM)} - ${ft(currH, currM + 5)}`,
-              title: "Giải lao nhanh",
-              desc: "5 phút • Micro-break, uống nước",
-              type: "rest"
-            });
-            [currH, currM] = addMins(currH, currM, 5);
-            availableMins -= 5;
-          }
-        } else if (availableMins >= 20) {
-          newSchedule.push({
-            time: `${ft(currH, currM)} - ${ft(currH, currM + availableMins)}`,
-            title: `Rút gọn: ${blocks[i].title}`,
-            desc: `${availableMins} phút (rút gọn từ ${bDuration}p) • Tập trung phần quan trọng nhất`,
-            type: "urgent"
-          });
-          [currH, currM] = addMins(currH, currM, availableMins);
-          availableMins = 0;
-        } else {
-          droppedBlocksCount++;
-          updatedBlocks[i].completed = true;
-        }
-      }
-
-      // Chèn dinner nếu chưa qua
-      let cTot = toTotal(currH, currM);
-      if (cTot >= FIXED_START && cTot < FIXED_END) {
-        [currH, currM] = insertFixedDinnerBlock(newSchedule, cTot);
-      }
-
-      // Vệ sinh + chuẩn bị ngủ
-      cTot = toTotal(currH, currM);
-      if (cTot < bedTotal && bedTotal - cTot > 0) {
-        const remainMins = bedTotal - cTot;
-        if (remainMins > 15) {
-          newSchedule.push({
-            time: `${ft(currH, currM)} - ${ft(bedH, bedM)}`,
-            title: "Vệ sinh cá nhân & Chuẩn bị ngủ",
-            desc: `${remainMins} phút • Thư giãn nhẹ, đánh răng, chuẩn bị ngủ`,
-            type: "rest"
-          });
-        }
-      }
-
-      if (droppedBlocksCount > 0) {
-        speakAnnounce(`Vì thời gian đã trễ, hệ thống tự động loại bỏ ${droppedBlocksCount} chu kỳ học tiếp theo để ép anh đi ngủ đúng giờ, tuyệt đối đảm bảo sức khỏe.`);
-        setBlocks(updatedBlocks);
-
-        while (newActiveIndex < updatedBlocks.length && updatedBlocks[newActiveIndex].completed) {
-          newActiveIndex++;
-        }
-        if (newActiveIndex !== activeBlockIndex) {
-          setActiveBlockIndex(newActiveIndex);
-          if (newActiveIndex < updatedBlocks.length) {
-            newTimeLeft = updatedBlocks[newActiveIndex].durationMins * 60;
-            setTimeLeft(newTimeLeft);
-          } else {
-            newTimeLeft = 0;
-            setIsActive(false);
-          }
-        }
+      if (droppedCount > 0) {
+        speakAnnounce(`Vì thời gian đã trễ, hệ thống tự động loại bỏ ${droppedCount} chu kỳ học tiếp theo để ép anh đi ngủ đúng giờ, tuyệt đối đảm bảo sức khỏe.`);
       }
     }
 
-    newSchedule.push({ time: `${ft(bedH, bedM)} - Sáng mai`, title: "Vệ sinh cá nhân, Night Plan & Ngủ sâu", desc: "Lên giường ngủ nghỉ đúng giờ", type: "rest" });
+    let newActiveIndex = activeBlockIndex;
+    while (newActiveIndex < updatedBlocks.length && updatedBlocks[newActiveIndex].completed) {
+      newActiveIndex++;
+    }
 
-    setGeneratedSchedule(newSchedule);
+    let newTimeLeft = timeLeft;
+    if (newActiveIndex !== activeBlockIndex) {
+      setActiveBlockIndex(newActiveIndex);
+      if (newActiveIndex < updatedBlocks.length) {
+        newTimeLeft = updatedBlocks[newActiveIndex].durationMins * 60;
+        setTimeLeft(newTimeLeft);
+      } else {
+        newTimeLeft = 0;
+        setIsActive(false);
+      }
+    }
+
+    setGeneratedSchedule(schedule);
     const newEndTime = (newActiveIndex < updatedBlocks.length && newTimeLeft > 0) ? new Date(Date.now() + newTimeLeft * 1000).toISOString() : null;
     syncAndBroadcast({
       blocks: updatedBlocks,
@@ -1063,7 +625,7 @@ export default function AptisIntensivePage() {
       isPausedDay: false,
       timeLeft: newTimeLeft,
       endTime: newEndTime,
-      schedule: newSchedule
+      schedule: schedule
     });
   };
 
@@ -1559,30 +1121,29 @@ export default function AptisIntensivePage() {
 
                 {planStep === 2 && (
                   <motion.div key="step3" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}>
-                    <h2 className="text-3xl font-light text-blue-50 mb-6 leading-tight">Sáng mai gọi dậy lúc mấy giờ để bào Aptis?</h2>
-                    <input type="time" value={wakeUpTime} onChange={(e) => setWakeUpTime(e.target.value)} className="w-full bg-blue-950/40 border border-blue-800 text-white text-5xl font-light p-6 rounded-2xl text-center focus:outline-none focus:border-blue-400 mb-6 style-time drop-shadow-[0_0_15px_rgba(59,130,246,0.1)]" style={{ colorScheme: "dark" }} />
-
-                    {(() => {
-                      const [h, m] = wakeUpTime.split(":").map(Number);
-                      const getBedTime = (cycles: number) => {
-                        const totalMins = cycles * 90 + 15; // 15 mins to fall asleep
-                        let sleepH = h - Math.floor(totalMins / 60);
-                        let sleepM = m - (totalMins % 60);
-                        if (sleepM < 0) { sleepM += 60; sleepH -= 1; }
-                        if (sleepH < 0) { sleepH += 24; }
-                        return `${String(sleepH).padStart(2, '0')}:${String(sleepM).padStart(2, '0')}`;
-                      };
-
-                      return (
-                        <div className="bg-blue-900/20 border border-blue-800/50 rounded-2xl p-5 mb-8 flex flex-col items-center shadow-[0_0_20px_rgba(59,130,246,0.1)]">
-                          <p className="text-blue-300/80 text-xs md:text-sm mb-3 font-medium uppercase tracking-wider font-mono text-center">Giờ đi ngủ khoa học (Đã fix 6 tiếng nước rút):</p>
-                          <div className="flex flex-col items-center flex-1 bg-blue-600/20 px-8 py-3 rounded-xl border border-blue-500/40 shadow-[0_0_25px_rgba(59,130,246,0.3)]">
-                            <span className="text-white font-mono font-bold text-4xl mb-1 tracking-tighter">{getBedTime(4)}</span>
-                            <span className="text-blue-200 text-[11px] md:text-xs font-bold mt-1 uppercase tracking-widest text-center">4 Chu kỳ (6 Tiếng)<br /><span className="text-[10px] text-blue-400 font-normal">+ 15p Ru ngủ</span></span>
-                          </div>
+                    {urgentTask ? (
+                      <>
+                        <h2 className="text-3xl font-light text-blue-50 mb-6 leading-tight">Bạn muốn dành bao nhiêu chu kỳ cho "{urgentTask}"?</h2>
+                        <div className="space-y-3 mb-8">
+                          {[1, 2].map(num => (
+                            <button key={num} onClick={() => setUrgentTaskCycles(num)} className={`w-full text-left px-6 py-4 rounded-xl border flex justify-between items-center transition-all text-lg font-light ${urgentTaskCycles === num ? 'bg-blue-600/30 border-blue-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.3)]' : 'border-blue-900 bg-blue-950/20 text-blue-200 hover:bg-blue-900/50 hover:border-blue-500'}`}>
+                              <span>{num} Chu kỳ (Khẩn cấp)</span>
+                              <span className="text-sm font-bold opacity-80">{num * 90}p học + {num * 15}p nghỉ</span>
+                            </button>
+                          ))}
                         </div>
-                      )
-                    })()}
+                      </>
+                    ) : (
+                      <h2 className="text-3xl font-light text-blue-50 mb-6 leading-tight">Xác nhận khung giờ sinh hoạt cuối ngày!</h2>
+                    )}
+
+                    <div className="bg-blue-900/20 border border-blue-800/50 rounded-2xl p-5 mb-8 flex flex-col items-center shadow-[0_0_20px_rgba(59,130,246,0.1)]">
+                      <p className="text-blue-300/80 text-xs md:text-sm mb-3 font-medium uppercase tracking-wider font-mono text-center">Giờ đi ngủ khoa học (Đã fix 6 tiếng nước rút):</p>
+                      <div className="flex flex-col items-center flex-1 bg-blue-600/20 px-8 py-3 rounded-xl border border-blue-500/40 shadow-[0_0_25px_rgba(59,130,246,0.3)]">
+                        <span className="text-white font-mono font-bold text-4xl mb-1 tracking-tighter">23:45</span>
+                        <span className="text-blue-200 text-[11px] md:text-xs font-bold mt-1 uppercase tracking-widest text-center">4 Chu kỳ (6 Tiếng)<br /><span className="text-[10px] text-blue-400 font-normal">+ 15p Ru ngủ</span></span>
+                      </div>
+                    </div>
 
                     <button onClick={generateSchedule} className="w-full bg-blue-600 text-white rounded-xl py-4 font-bold text-lg shadow-[0_0_30px_rgba(59,130,246,0.4)] hover:bg-blue-500 transition-colors flex items-center justify-center">
                       Tạo Lịch Trình Tự Động <ChevronRight className="w-5 h-5 ml-2" />
