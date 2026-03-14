@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { ArrowRight, Brain, Moon } from "lucide-react";
-import { SLEEP_CYCLE_MINS, FALL_ASLEEP_MINS, DEFAULT_SLEEP_CYCLES, SLEEP_CYCLE_OPTIONS } from "@/lib/constants";
+import { SLEEP_CYCLE_MINS, FALL_ASLEEP_MINS, BEDTIME_MINS } from "@/lib/constants";
+import { formatMins } from "@/lib/schedule";
 
 export default function SleepPage() {
-  const [wakeTime, setWakeTime] = useState("06:45");
+  const [wakeTime, setWakeTime] = useState("07:30");
   const [bedTimes, setBedTimes] = useState<
     { time: string; cycles: number; hours: string; isOptimal: boolean; note: string }[]
   >([]);
@@ -33,15 +34,15 @@ export default function SleepPage() {
 
       let note = "";
       if (cycle === 6) note = "Rất nhiều → phù hợp phục hồi sau bệnh";
-      if (cycle === DEFAULT_SLEEP_CYCLES) note = "🧠 Tối ưu — đủ REM ghi nhớ ngôn ngữ";
-      if (cycle === 4) note = "Tối thiểu — chỉ dùng ngắn hạn (nước rút)";
+      if (cycle === 5) note = "🧠 Tối ưu — đủ REM ghi nhớ ngôn ngữ";
+      if (cycle === 4) note = "Nước rút — phù hợp khi có ca sáng";
       if (cycle === 3) note = "⚠️ Thiếu ngủ nghiêm trọng — không khuyến khích";
 
       results.push({
         time: `${bHours}:${bMins}`,
         cycles: cycle,
         hours: `${totalHours}h`,
-        isOptimal: cycle === DEFAULT_SLEEP_CYCLES,
+        isOptimal: cycle === 5,
         note,
       });
     }
@@ -57,7 +58,7 @@ export default function SleepPage() {
           <h1 className="text-4xl md:text-5xl font-light tracking-tight">Sleep.</h1>
         </div>
         <p className="text-gray-500">
-          Tính giờ ngủ theo chu kỳ {SLEEP_CYCLE_MINS} phút — tối ưu hóa REM cho ghi nhớ ngôn ngữ.
+          Ngủ cố định {formatMins(BEDTIME_MINS)} — tính giờ dậy theo chu kỳ {SLEEP_CYCLE_MINS} phút.
         </p>
       </header>
 
@@ -131,15 +132,15 @@ export default function SleepPage() {
             <div className="flex items-start gap-3">
               <Brain className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
               <div>
-                <p className="text-indigo-300 text-sm font-medium mb-1">Khoa học giấc ngủ</p>
+                <p className="text-indigo-300 text-sm font-medium mb-1">Lịch ngủ cố định của em</p>
                 <p className="text-gray-500 text-xs leading-relaxed">
-                  <strong className="text-gray-400">SWS (Slow-Wave Sleep):</strong> Tập trung ở chu kỳ
-                  1-3, phục hồi cơ thể.
+                  <strong className="text-gray-400">Ngủ:</strong> 23:45 cố định mỗi ngày
                   <br />
-                  <strong className="text-gray-400">REM:</strong> Tập trung ở chu kỳ 4-5, cần thiết cho
-                  ghi nhớ ngôn ngữ & sáng tạo.
+                  <strong className="text-gray-400">Dậy 06:00:</strong> 4 chu kỳ (6h) — khi có ca sáng
                   <br />
-                  <span className="text-indigo-400">→ Ngủ 4 chu kỳ = thiếu REM = mất ~40% khả năng ghi nhớ từ vựng.</span>
+                  <strong className="text-gray-400">Dậy 07:30:</strong> 5 chu kỳ (7h30) — đủ REM ghi nhớ ✓
+                  <br />
+                  <span className="text-indigo-400">→ Chọn giờ dậy trong Night Plan mỗi tối lúc 22h.</span>
                 </p>
               </div>
             </div>

@@ -2,15 +2,16 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ChevronRight, CheckCircle, Moon } from "lucide-react";
+import { X, ChevronRight, CheckCircle, Sun, Moon } from "lucide-react";
 import type { ScheduleItem, SchoolShift } from "@/lib/types";
 import {
-  SLEEP_CYCLE_OPTIONS,
-  DEFAULT_SLEEP_CYCLES,
+  WAKE_OPTIONS,
+  DEFAULT_WAKE_MINS,
+  BEDTIME_MINS,
   SLEEP_CYCLE_MINS,
   FALL_ASLEEP_MINS,
-  WAKE_TIME_MINS,
-  calcBedtime,
+  calcCyclesFromWake,
+  formatMinsStatic,
 } from "@/lib/constants";
 import { formatMins } from "@/lib/schedule";
 
@@ -21,7 +22,7 @@ type NightPlanModalProps = {
     shift: SchoolShift,
     urgentTask: string,
     urgentCycles: number,
-    sleepCycles: number
+    wakeMins: number
   ) => ScheduleItem[];
   onConfirmSleep: (schedule: ScheduleItem[]) => void;
   generatedSchedule: ScheduleItem[];
@@ -46,29 +47,32 @@ export default function NightPlanModal({
   const [schoolShift, setSchoolShift] = useState<SchoolShift>("");
   const [urgentTask, setUrgentTask] = useState("");
   const [urgentTaskCycles, setUrgentTaskCycles] = useState(1);
-  const [sleepCycles, setSleepCycles] = useState<number>(DEFAULT_SLEEP_CYCLES);
+  const [wakeMins, setWakeMins] = useState<number>(DEFAULT_WAKE_MINS);
   const [localSchedule, setLocalSchedule] = useState<ScheduleItem[]>([]);
 
   const schedule = localSchedule.length > 0 ? localSchedule : externalSchedule;
-  const totalSteps = 4; // school → urgent → sleep cycles → generate
+  const totalSteps = 4;
 
   const handleClose = () => {
     setPlanStep(0);
     setSchoolShift("");
     setUrgentTask("");
     setUrgentTaskCycles(1);
-    setSleepCycles(DEFAULT_SLEEP_CYCLES);
+    setWakeMins(DEFAULT_WAKE_MINS);
     setLocalSchedule([]);
     onClose();
   };
 
   const handleGenerate = () => {
-    const result = onGenerateSchedule(schoolShift, urgentTask, urgentTaskCycles, sleepCycles);
+    const result = onGenerateSchedule(schoolShift, urgentTask, urgentTaskCycles, wakeMins);
     setLocalSchedule(result);
     setPlanStep(4);
   };
 
   if (!isOpen) return null;
+
+  const selectedCycles = calcCyclesFromWake(wakeMins);
+  const selectedSleepH = (selectedCycles * SLEEP_CYCLE_MINS) / 60;
 
   return (
     <AnimatePresence>
@@ -169,7 +173,7 @@ export default function NightPlanModal({
               </motion.div>
             )}
 
-            {/* Step 3: Choose sleep cycles (6 or 7) */}
+            {/* Step 3: Choose wake time (06:00 or 07:30) */}
             {planStep === 2 && (
               <motion.div
                 key="step3"
@@ -178,70 +182,63 @@ export default function NightPlanModal({
                 exit={{ x: -20, opacity: 0 }}
               >
                 <h2 className="text-3xl font-light text-blue-50 mb-4 leading-tight">
-                  Đêm nay ngủ bao nhiêu chu kỳ?
+                  Sáng mai dậy lúc mấy giờ?
                 </h2>
                 <p className="text-gray-500 text-sm mb-8">
-                  Thức dậy cố định lúc <span className="text-blue-400 font-bold">{formatMins(WAKE_TIME_MINS)}</span>
+                  Ngủ cố định lúc <span className="text-indigo-400 font-bold">{formatMins(BEDTIME_MINS)}</span>
                 </p>
 
                 <div className="space-y-4 mb-8">
-                  {SLEEP_CYCLE_OPTIONS.map((cycles) => {
-                    const bedtime = calcBedtime(cycles);
-                    const sleepH = (cycles * SLEEP_CYCLE_MINS) / 60;
-                    const totalMins = cycles * SLEEP_CYCLE_MINS + FALL_ASLEEP_MINS;
-                    const isSelected = sleepCycles === cycles;
+                  {WAKE_OPTIONS.map((opt) => {
+                    const isSelected = wakeMins === opt.time;
 
                     return (
                       <button
-                        key={cycles}
-                        onClick={() => setSleepCycles(cycles)}
+                        key={opt.time}
+                        onClick={() => setWakeMins(opt.time)}
                         className={`w-full text-left px-6 py-5 rounded-2xl border transition-all ${
                           isSelected
-                            ? "bg-indigo-600/20 border-indigo-500 text-white shadow-[0_0_20px_rgba(99,102,241,0.3)]"
-                            : "border-indigo-900/50 bg-indigo-950/10 text-indigo-200 hover:bg-indigo-900/30 hover:border-indigo-500"
+                            ? "bg-amber-600/15 border-amber-500 text-white shadow-[0_0_20px_rgba(245,158,11,0.2)]"
+                            : "border-gray-800 bg-gray-900/20 text-gray-200 hover:bg-gray-800/40 hover:border-gray-600"
                         }`}
                       >
                         <div className="flex justify-between items-center">
                           <div className="flex items-center gap-3">
-                            <Moon className={`w-5 h-5 ${isSelected ? "text-indigo-400" : "text-indigo-600"}`} />
+                            <Sun className={`w-5 h-5 ${isSelected ? "text-amber-400" : "text-gray-600"}`} />
                             <div>
-                              <span className="text-2xl font-bold font-mono">{cycles}</span>
-                              <span className="text-lg ml-1">chu kỳ</span>
+                              <span className="text-3xl font-bold font-mono">{opt.label}</span>
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-lg font-mono font-bold">{formatMins(bedtime)}</div>
-                            <div className="text-xs text-indigo-400/60">{sleepH}h ngủ</div>
+                            <div className={`text-sm font-bold ${isSelected ? "text-amber-300" : "text-gray-500"}`}>
+                              {opt.cycles} chu kỳ
+                            </div>
+                            <div className="text-xs text-gray-500">{opt.sleepHours}h ngủ</div>
                           </div>
                         </div>
-                        <p className={`text-xs mt-2 ${isSelected ? "text-indigo-300" : "text-indigo-400/40"}`}>
-                          {cycles === 6
-                            ? "9h ngủ — phục hồi tốt, đủ REM cho ghi nhớ ngôn ngữ"
-                            : "10h30 ngủ — phục hồi sâu, phù hợp khi mệt hoặc ốm"}
+                        <p className={`text-xs mt-2 ${isSelected ? "text-amber-200/70" : "text-gray-600"}`}>
+                          {opt.note}
                         </p>
                       </button>
                     );
                   })}
                 </div>
 
-                {/* Summary card */}
-                <div className="bg-indigo-900/20 border border-indigo-800/50 rounded-2xl p-4 mb-6">
+                {/* Sleep summary card */}
+                <div className="bg-indigo-900/15 border border-indigo-800/40 rounded-2xl p-4 mb-6">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-indigo-300/60 text-xs uppercase font-mono tracking-wider">Lên giường</p>
-                      <p className="text-white font-mono font-bold text-3xl">{formatMins(calcBedtime(sleepCycles))}</p>
+                    <div className="text-center">
+                      <p className="text-indigo-300/50 text-[10px] uppercase font-mono tracking-wider">Ngủ</p>
+                      <p className="text-white font-mono font-bold text-2xl">23:45</p>
                     </div>
-                    <div className="text-3xl">→</div>
-                    <div>
-                      <p className="text-indigo-300/60 text-xs uppercase font-mono tracking-wider">Thức dậy</p>
-                      <p className="text-white font-mono font-bold text-3xl">{formatMins(WAKE_TIME_MINS)}</p>
+                    <Moon className="w-5 h-5 text-indigo-500" />
+                    <div className="text-center">
+                      <p className="text-amber-300/50 text-[10px] uppercase font-mono tracking-wider">Dậy</p>
+                      <p className="text-white font-mono font-bold text-2xl">{formatMinsStatic(wakeMins)}</p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-indigo-300/60 text-xs uppercase font-mono tracking-wider">Tổng</p>
-                      <p className="text-indigo-300 font-mono font-bold text-xl">
-                        {(sleepCycles * SLEEP_CYCLE_MINS) / 60}h
-                      </p>
-                      <p className="text-indigo-500/40 text-[10px]">+{FALL_ASLEEP_MINS}p ru ngủ</p>
+                    <div className="text-center">
+                      <p className="text-gray-500 text-[10px] uppercase font-mono tracking-wider">Tổng</p>
+                      <p className="text-indigo-300 font-mono font-bold text-xl">{selectedSleepH}h</p>
                     </div>
                   </div>
                 </div>
@@ -281,7 +278,7 @@ export default function NightPlanModal({
                   <div className="flex justify-between items-center bg-indigo-900/10 rounded-xl px-5 py-3 border border-indigo-900/30">
                     <span className="text-indigo-400/60">Giấc ngủ</span>
                     <span className="text-indigo-200 font-medium">
-                      {sleepCycles} CK • {formatMins(calcBedtime(sleepCycles))} → 06:45
+                      23:45 → {formatMinsStatic(wakeMins)} ({selectedCycles} CK • {selectedSleepH}h)
                     </span>
                   </div>
                 </div>
@@ -304,10 +301,10 @@ export default function NightPlanModal({
                 className="flex flex-col h-[85vh] md:h-[80vh] overflow-hidden bg-black mt-2"
               >
                 <h2 className="text-2xl font-bold text-blue-400 mb-2 uppercase tracking-widest flex items-center shrink-0">
-                  <CheckCircle className="w-5 h-5 mr-2" /> Kế hoạch {sleepCycles} chu kỳ
+                  <CheckCircle className="w-5 h-5 mr-2" /> Kế hoạch ngày mai
                 </h2>
                 <p className="text-gray-400 mb-4 text-sm shrink-0">
-                  52:17 Ultradian • Ngủ {formatMins(calcBedtime(sleepCycles))} → 06:45
+                  52:17 Ultradian • Ngủ 23:45 → Dậy {formatMinsStatic(wakeMins)}
                 </p>
 
                 <div className="overflow-y-auto space-y-4 pr-2 pb-32 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-blue-900 flex-1">
