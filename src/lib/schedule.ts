@@ -116,9 +116,7 @@ export const generateBrainSchedule = (
 
   // Always add daily fixed blocks (static)
   const alwaysInclude = [
-    FIXED_BLOCKS.lunch,
-    FIXED_BLOCKS.powerNap,
-    FIXED_BLOCKS.napBuffer,
+    FIXED_BLOCKS.lunchRest,
     FIXED_BLOCKS.exercise,
     FIXED_BLOCKS.shower,
     FIXED_BLOCKS.dinner,
@@ -133,15 +131,13 @@ export const generateBrainSchedule = (
   // Add school shifts
   if (
     schoolShift === "Chỉ buổi Sáng" ||
-    schoolShift === "Sáng & Chiều" ||
-    schoolShift === "Thứ 7 (Học cả ngày)"
+    schoolShift === "Sáng & Chiều"
   ) {
     fixedBlocks.push({ ...SCHOOL_SHIFTS.morning });
   }
   if (
     schoolShift === "Chỉ buổi Chiều" ||
-    schoolShift === "Sáng & Chiều" ||
-    schoolShift === "Thứ 7 (Học cả ngày)"
+    schoolShift === "Sáng & Chiều"
   ) {
     fixedBlocks.push({ ...SCHOOL_SHIFTS.afternoon });
   }

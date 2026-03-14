@@ -32,7 +32,6 @@ const SHIFT_OPTIONS: SchoolShift[] = [
   "Sáng & Chiều",
   "Chỉ buổi Sáng",
   "Chỉ buổi Chiều",
-  "Thứ 7 (Học cả ngày)",
   "Nghỉ ở nhà",
 ];
 

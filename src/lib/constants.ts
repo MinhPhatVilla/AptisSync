@@ -134,14 +134,11 @@ export const RECOVERY_ACTIVITIES = {
 };
 
 // ── Fixed Daily Blocks ──
-// Morning blocks depend on wake time, so we use earliest possible (06:00)
 export const FIXED_BLOCKS = {
-  lunch: { start: 11 * 60, end: 11 * 60 + 30, title: "Ăn trưa", desc: "Nạp năng lượng — tránh carbs đơn giản gây buồn ngủ", type: "rest" as const },
-  powerNap: { start: 11 * 60 + 30, end: 12 * 60, title: "Power Nap (20-26p)", desc: "⚠️ KHÔNG ngủ quá 30p → Stage 2 Sleep = tăng tỉnh táo", type: "rest" as const },
-  napBuffer: { start: 12 * 60, end: 12 * 60 + 15, title: "Buffer chống mù ngủ", desc: "Uống nước lạnh, đi bộ nhẹ, ánh sáng mạnh", type: "rest" as const },
-  exercise: { start: 17 * 60, end: 17 * 60 + 30, title: "Thể thao nhẹ", desc: "Tăng BDNF → trực tiếp hỗ trợ ghi nhớ dài hạn", type: "rest" as const },
-  shower: { start: 17 * 60 + 30, end: 18 * 60, title: "Tắm rửa", desc: "Hạ nhiệt cơ thể → chuẩn bị cho phiên tối", type: "rest" as const },
-  dinner: { start: 18 * 60, end: 18 * 60 + 30, title: "Ăn tối", desc: "Ăn nhẹ, tránh cafein sau 14h", type: "rest" as const },
+  lunchRest: { start: 11 * 60, end: 13 * 60, title: "🍳 Nấu ăn & Nghỉ trưa", desc: "Nấu cơm, ăn trưa, nghỉ ngơi — Power Nap 20p nếu cần", type: "rest" as const },
+  exercise: { start: 17 * 60, end: 17 * 60 + 30, title: "🏃 Thể thao nhẹ", desc: "Tăng BDNF → hỗ trợ ghi nhớ dài hạn", type: "rest" as const },
+  shower: { start: 17 * 60 + 30, end: 18 * 60, title: "🚿 Tắm rửa", desc: "Hạ nhiệt cơ thể → chuẩn bị cho phiên tối", type: "rest" as const },
+  dinner: { start: 18 * 60, end: 18 * 60 + 30, title: "🍽️ Ăn tối", desc: "Ăn nhẹ, tránh cafein sau 14h", type: "rest" as const },
 };
 
 // ── Dynamic Morning Blocks (depends on wake time) ──
