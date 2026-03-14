@@ -12,6 +12,8 @@ import {
   BREAK_DURATION,
   NIGHT_PLAN_START_HOUR,
   NIGHT_PLAN_AUTO_HOUR,
+  WAKE_TIME_MINS,
+  DEFAULT_SLEEP_CYCLES,
 } from "@/lib/constants";
 import { generateBrainSchedule } from "@/lib/schedule";
 
@@ -498,17 +500,19 @@ export default function AptisIntensivePage() {
   const handleGenerateSchedule = (
     shift: SchoolShift,
     urgentTask: string,
-    urgentCycles: number
+    urgentCycles: number,
+    sleepCycles: number = DEFAULT_SLEEP_CYCLES
   ): ScheduleItem[] => {
     const { schedule } = generateBrainSchedule(
-      6 * 60, // Start from 06:00 for tomorrow
+      WAKE_TIME_MINS, // Start from 06:45 for tomorrow
       shift,
       blocks,
       activeBlockIndex,
       timeLeft,
       urgentTask,
       urgentCycles,
-      true
+      true,
+      sleepCycles
     );
     setGeneratedSchedule(schedule);
     return schedule;

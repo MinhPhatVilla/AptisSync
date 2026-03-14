@@ -18,20 +18,41 @@ export const SHORT_BREAK = 10;    // minutes (micro-break for tight windows)
 export const TARGET_MINUTES = 208;
 
 // ── Sleep Science ──
-// 1 sleep cycle = 90 min, optimal = 5 cycles
+// 1 sleep cycle = 90 min
+// Em chọn cố định 6 hoặc 7 chu kỳ tùy ngày
 // 15 min to fall asleep
 export const SLEEP_CYCLE_MINS = 90;
 export const FALL_ASLEEP_MINS = 15;
-export const OPTIMAL_CYCLES = 5; // 7h30 total
-export const MIN_CYCLES = 4;     // 6h minimum
 
-// ── Bedtime & Wake ──
-// 5 cycles × 90 + 15 fall asleep = 7h45 before wake
-// Wake 06:00 → Sleep 22:15 → Bed 22:00
-export const WAKE_TIME_MINS = 6 * 60;         // 06:00
-export const BEDTIME_MINS = 22 * 60 + 15;     // 22:15 (lên giường)
-export const DIGITAL_SUNSET_MINS = 22 * 60;   // 22:00 (tắt màn hình)
-export const END_OF_STUDY_MINS = 21 * 60 + 15; // 21:15 (hết phiên học tối)
+// ── Chu Kỳ Ngủ Tuỳ Chọn ──
+// 6 chu kỳ = 9h ngủ → bed 21:30
+// 7 chu kỳ = 10h30 ngủ → bed 20:00
+export const SLEEP_CYCLE_OPTIONS = [6, 7] as const;
+export const DEFAULT_SLEEP_CYCLES = 6;
+
+// ── Wake Time Cố Định ──
+export const WAKE_TIME_MINS = 6 * 60 + 45;  // 06:45 cố định
+
+// ── Bedtime Calculator ──
+// Tính giờ ngủ từ giờ dậy và số chu kỳ
+export const calcBedtime = (cycles: number): number => {
+  // bedtime = wake - (cycles * 90 + 15 fall asleep)
+  const totalSleepMins = cycles * SLEEP_CYCLE_MINS + FALL_ASLEEP_MINS;
+  let bed = WAKE_TIME_MINS - totalSleepMins;
+  if (bed < 0) bed += 24 * 60; // wrap around midnight
+  return bed;
+};
+
+// ── Pre-calculated Bedtimes ──
+// 6 chu kỳ: 06:45 - 9h15 = 21:30
+// 7 chu kỳ: 06:45 - 10h45 = 20:00
+export const BEDTIME_6_CYCLES = calcBedtime(6);  // 21:30 = 1290 min
+export const BEDTIME_7_CYCLES = calcBedtime(7);  // 20:00 = 1200 min
+
+// Default bedtime (6 chu kỳ)
+export const BEDTIME_MINS = BEDTIME_6_CYCLES;     // 21:30
+export const DIGITAL_SUNSET_MINS = BEDTIME_6_CYCLES - 15; // 21:15
+export const END_OF_STUDY_MINS = BEDTIME_6_CYCLES - 60;   // 20:30 (hết phiên học tối)
 
 // ── Power Nap ──
 // Stage 2 sleep only: 20-26 min optimal
@@ -108,17 +129,14 @@ export const RECOVERY_ACTIVITIES = {
 
 // ── Fixed Daily Blocks ──
 export const FIXED_BLOCKS = {
-  morning: { start: 6 * 60, end: 6 * 60 + 30, title: "Thức dậy & Vệ sinh", desc: "Tiếp xúc ánh sáng tự nhiên, reset circadian clock", type: "rest" as const },
-  breakfast: { start: 6 * 60 + 30, end: 7 * 60, title: "Ăn sáng", desc: "Carbs phức + protein → glucose ổn định cho não", type: "rest" as const },
+  morning: { start: 6 * 60 + 45, end: 7 * 60 + 15, title: "Thức dậy & Vệ sinh", desc: "06:45 — Tiếp xúc ánh sáng tự nhiên, reset circadian clock", type: "rest" as const },
+  breakfast: { start: 7 * 60 + 15, end: 7 * 60 + 45, title: "Ăn sáng", desc: "Carbs phức + protein → glucose ổn định cho não", type: "rest" as const },
   lunch: { start: 11 * 60, end: 11 * 60 + 30, title: "Ăn trưa", desc: "Nạp năng lượng — tránh carbs đơn giản gây buồn ngủ", type: "rest" as const },
   powerNap: { start: 11 * 60 + 30, end: 12 * 60, title: "Power Nap (20-26p)", desc: "⚠️ KHÔNG ngủ quá 30p → Stage 2 Sleep = tăng tỉnh táo", type: "rest" as const },
   napBuffer: { start: 12 * 60, end: 12 * 60 + 15, title: "Buffer chống mù ngủ", desc: "Uống nước lạnh, đi bộ nhẹ, ánh sáng mạnh", type: "rest" as const },
   exercise: { start: 17 * 60, end: 17 * 60 + 30, title: "Thể thao nhẹ", desc: "Tăng BDNF → trực tiếp hỗ trợ ghi nhớ dài hạn", type: "rest" as const },
   shower: { start: 17 * 60 + 30, end: 18 * 60, title: "Tắm rửa", desc: "Hạ nhiệt cơ thể → chuẩn bị cho phiên tối", type: "rest" as const },
   dinner: { start: 18 * 60, end: 18 * 60 + 30, title: "Ăn tối", desc: "Ăn nhẹ, tránh cafein sau 14h", type: "rest" as const },
-  freeTime: { start: 21 * 60 + 15, end: 22 * 60, title: "Thời gian tự do", desc: "Giải trí nhẹ — não cần downtime", type: "rest" as const },
-  digitalSunset: { start: 22 * 60, end: 22 * 60 + 15, title: "Digital Sunset", desc: "📵 Tắt màn hình xanh, đọc sách giấy, light stretching", type: "rest" as const },
-  sleep: { start: 22 * 60 + 15, end: 6 * 60, title: "Ngủ sâu (5 chu kỳ = 7h30)", desc: "Lên giường → 22:15, ngủ ~22:30 → Thức 06:00. REM ở chu kỳ 4-5 = ghi nhớ ngôn ngữ!", type: "sleep" as const },
 };
 
 // ── School Shift Blocks ──
@@ -128,5 +146,26 @@ export const SCHOOL_SHIFTS = {
 };
 
 // ── Night Plan Time ──
-export const NIGHT_PLAN_START_HOUR = 21; // Cho phép lập kế hoạch từ 21h
-export const NIGHT_PLAN_AUTO_HOUR = 22;  // Tự động popup lúc 22h
+export const NIGHT_PLAN_START_HOUR = 19; // Cho phép lập kế hoạch từ 19h (vì 7 chu kỳ = ngủ 20:00)
+export const NIGHT_PLAN_AUTO_HOUR = 20;  // Tự động popup lúc 20h
+
+// ── Helper: tạo dynamic fixed blocks theo số chu kỳ ──
+export const getDynamicFixedBlocks = (cycles: number) => {
+  const bedtime = calcBedtime(cycles);
+  const digitalSunset = bedtime - 15;
+  const freeTimeStart = bedtime - 60;
+  const sleepHours = (cycles * SLEEP_CYCLE_MINS) / 60;
+
+  return {
+    freeTime: { start: freeTimeStart, end: digitalSunset, title: "Thời gian tự do", desc: "Giải trí nhẹ — não cần downtime", type: "rest" as const },
+    digitalSunset: { start: digitalSunset, end: bedtime, title: "Digital Sunset", desc: "📵 Tắt màn hình xanh, đọc sách giấy", type: "rest" as const },
+    sleep: { start: bedtime, end: WAKE_TIME_MINS, title: `💤 Ngủ sâu (${cycles} chu kỳ = ${sleepHours}h)`, desc: `Lên giường lúc ${formatMinsStatic(bedtime)} → Thức 06:45`, type: "sleep" as const },
+  };
+};
+
+/** Format mins to HH:MM (static helper for constants) */
+const formatMinsStatic = (mins: number): string => {
+  const h = Math.floor(mins / 60) % 24;
+  const m = mins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+};

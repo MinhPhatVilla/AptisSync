@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { ArrowRight, Brain, Moon } from "lucide-react";
-import { SLEEP_CYCLE_MINS, FALL_ASLEEP_MINS, OPTIMAL_CYCLES } from "@/lib/constants";
+import { SLEEP_CYCLE_MINS, FALL_ASLEEP_MINS, DEFAULT_SLEEP_CYCLES, SLEEP_CYCLE_OPTIONS } from "@/lib/constants";
 
 export default function SleepPage() {
-  const [wakeTime, setWakeTime] = useState("06:00");
+  const [wakeTime, setWakeTime] = useState("06:45");
   const [bedTimes, setBedTimes] = useState<
     { time: string; cycles: number; hours: string; isOptimal: boolean; note: string }[]
   >([]);
@@ -33,7 +33,7 @@ export default function SleepPage() {
 
       let note = "";
       if (cycle === 6) note = "Rất nhiều → phù hợp phục hồi sau bệnh";
-      if (cycle === OPTIMAL_CYCLES) note = "🧠 Tối ưu — đủ REM ghi nhớ ngôn ngữ";
+      if (cycle === DEFAULT_SLEEP_CYCLES) note = "🧠 Tối ưu — đủ REM ghi nhớ ngôn ngữ";
       if (cycle === 4) note = "Tối thiểu — chỉ dùng ngắn hạn (nước rút)";
       if (cycle === 3) note = "⚠️ Thiếu ngủ nghiêm trọng — không khuyến khích";
 
@@ -41,7 +41,7 @@ export default function SleepPage() {
         time: `${bHours}:${bMins}`,
         cycles: cycle,
         hours: `${totalHours}h`,
-        isOptimal: cycle === OPTIMAL_CYCLES,
+        isOptimal: cycle === DEFAULT_SLEEP_CYCLES,
         note,
       });
     }

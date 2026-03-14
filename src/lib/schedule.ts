@@ -12,10 +12,13 @@ import {
   INITIAL_BLOCKS,
   FIXED_BLOCKS,
   SCHOOL_SHIFTS,
-  BEDTIME_MINS,
-  END_OF_STUDY_MINS,
   RECOVERY_ACTIVITIES,
   COGNITIVE_PEAKS,
+  calcBedtime,
+  getDynamicFixedBlocks,
+  DEFAULT_SLEEP_CYCLES,
+  SLEEP_CYCLE_MINS,
+  WAKE_TIME_MINS,
 } from "./constants";
 
 // ── Helpers ──
@@ -79,7 +82,7 @@ type ScheduleResult = {
  * 1. 52:17 Ultradian rhythm (DeskTime research)
  * 2. Cognitive peak matching (analytical AM, creative PM)
  * 3. Active recovery breaks (no phone scrolling!)
- * 4. Hard bedtime at 22:15 for 5 sleep cycles
+ * 4. Hard bedtime based on chosen sleep cycles (6 or 7)
  * 5. Power nap 20-26 min (never >30)
  */
 export const generateBrainSchedule = (
@@ -90,7 +93,8 @@ export const generateBrainSchedule = (
   timeLeft: number,
   urgentTask: string,
   urgentTaskCycles: number,
-  planningForTomorrow: boolean
+  planningForTomorrow: boolean,
+  sleepCycles: number = DEFAULT_SLEEP_CYCLES
 ): ScheduleResult => {
   const schedule: ScheduleItem[] = [];
   let currentMins = startMins;
@@ -104,7 +108,7 @@ export const generateBrainSchedule = (
     type: string;
   }> = [];
 
-  // Always add daily fixed blocks
+  // Always add daily fixed blocks (static ones)
   const alwaysInclude = [
     FIXED_BLOCKS.morning,
     FIXED_BLOCKS.breakfast,
@@ -114,11 +118,14 @@ export const generateBrainSchedule = (
     FIXED_BLOCKS.exercise,
     FIXED_BLOCKS.shower,
     FIXED_BLOCKS.dinner,
-    FIXED_BLOCKS.freeTime,
-    FIXED_BLOCKS.digitalSunset,
   ];
 
   alwaysInclude.forEach((b) => fixedBlocks.push({ ...b }));
+
+  // Add dynamic blocks based on sleep cycles
+  const dynamicBlocks = getDynamicFixedBlocks(sleepCycles);
+  fixedBlocks.push({ ...dynamicBlocks.freeTime });
+  fixedBlocks.push({ ...dynamicBlocks.digitalSunset });
 
   // Add school shifts
   if (
@@ -153,7 +160,7 @@ export const generateBrainSchedule = (
   let firstBlockTime =
     !planningForTomorrow && timeLeft > 0 ? Math.ceil(timeLeft / 60) : 0;
 
-  const END_OF_DAY = BEDTIME_MINS; // 22:15
+  const END_OF_DAY = calcBedtime(sleepCycles);
 
   // ── Fill schedule ──
   while (currentMins < END_OF_DAY) {
@@ -287,11 +294,13 @@ export const generateBrainSchedule = (
   }
 
   // Add sleep block
+  const bedtime = calcBedtime(sleepCycles);
+  const sleepHours = (sleepCycles * SLEEP_CYCLE_MINS) / 60;
   if (!schedule.find((s) => s.title.includes("Ngủ sâu"))) {
     schedule.push({
-      time: `${formatMins(BEDTIME_MINS)} - ${formatMins(FIXED_BLOCKS.sleep.end)}`,
-      title: "💤 Ngủ sâu (5 chu kỳ = 7h30)",
-      desc: "REM ở chu kỳ 4-5 = ghi nhớ ngôn ngữ! Tuyệt đối đúng giờ.",
+      time: `${formatMins(bedtime)} - ${formatMins(WAKE_TIME_MINS)}`,
+      title: `💤 Ngủ sâu (${sleepCycles} chu kỳ = ${sleepHours}h)`,
+      desc: `Lên giường lúc ${formatMins(bedtime)} → Thức 06:45`,
       type: "sleep",
     });
   }
@@ -305,15 +314,18 @@ export const generateFallbackTimeline = (
   activeBlockIndex: number,
   timeLeft: number,
   isActive: boolean,
-  currentDateTime: Date
+  currentDateTime: Date,
+  sleepCycles: number = DEFAULT_SLEEP_CYCLES
 ): ScheduleItem[] => {
   const schedule: ScheduleItem[] = [];
   let currH = currentDateTime.getHours();
   let currM = currentDateTime.getMinutes();
-  const bedH = Math.floor(BEDTIME_MINS / 60);
-  const bedM = BEDTIME_MINS % 60;
+  const bedtime = calcBedtime(sleepCycles);
+  const bedH = Math.floor(bedtime / 60);
+  const bedM = bedtime % 60;
+  const sleepHours = (sleepCycles * SLEEP_CYCLE_MINS) / 60;
 
-  let bedTotal = BEDTIME_MINS;
+  let bedTotal = bedtime;
   let startTotal = currH * 60 + currM;
   if (bedTotal < startTotal && bedTotal < 12 * 60) bedTotal += 24 * 60;
   let remainingMins = bedTotal - startTotal;
@@ -378,7 +390,7 @@ export const generateFallbackTimeline = (
         schedule.push({
           time: "⏭️ Bỏ qua",
           title: block.title,
-          desc: `Không đủ thời gian trước giờ ngủ (${formatMins(BEDTIME_MINS)})`,
+          desc: `Không đủ thời gian trước giờ ngủ (${formatMins(bedtime)})`,
           type: "completed",
           completed: true,
         });
@@ -399,9 +411,9 @@ export const generateFallbackTimeline = (
   }
 
   schedule.push({
-    time: `${formatMins(bedH * 60 + bedM)} - 06:00`,
-    title: "💤 Ngủ sâu (5 chu kỳ)",
-    desc: "7h30 = đủ REM cho ghi nhớ ngôn ngữ",
+    time: `${formatMins(bedH * 60 + bedM)} - 06:45`,
+    title: `💤 Ngủ sâu (${sleepCycles} chu kỳ)`,
+    desc: `${sleepHours}h ngủ → Thức 06:45`,
     type: "sleep",
   });
 
