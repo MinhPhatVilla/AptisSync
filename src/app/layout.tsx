@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 import "./globals.css";
 import MainLayout from "@/components/layout/MainLayout";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 const outfit = Outfit({
   variable: "--font-outfit",
@@ -9,8 +10,8 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Focus Time App",
-  description: "A scientific time management app focused on English learning",
+  title: "AptisSync — Brain-Optimized",
+  description: "Quản lý thời gian học Aptis theo khoa học não bộ",
   manifest: "/manifest.json",
 };
 
@@ -20,13 +21,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="vi" className="dark" suppressHydrationWarning>
       <body
         className={`${outfit.variable} font-sans antialiased bg-black text-white min-h-screen`}
         suppressHydrationWarning
       >
-        <MainLayout>{children}</MainLayout>
+        <ErrorBoundary>
+          <MainLayout>{children}</MainLayout>
+        </ErrorBoundary>
       </body>
     </html>
   );
 }
+
