@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useState } from "react";
 
@@ -13,53 +13,87 @@ export default function LoginScreen({ onAuthComplete }: LoginScreenProps) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg("");
+    setSuccessMsg("");
 
     try {
-      // Try sign in first
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      // Bước 1: Thử đăng nhập
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-      if (error) {
-        console.error("Sign in error:", error.message, error.status);
+      if (!error) {
+        // Đăng nhập thành công — onAuthStateChange sẽ xử lý
+        setLoading(false);
+        return;
+      }
 
-        // If credentials invalid, try sign up
-        if (
-          error.message.includes("Invalid login credentials") ||
-          error.message.includes("invalid_credentials")
-        ) {
-          const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+      console.log("Sign in result:", error.message);
+
+      // Bước 2: Nếu sai credentials → thử đăng ký
+      if (
+        error.message.includes("Invalid login credentials") ||
+        error.message.includes("invalid_credentials")
+      ) {
+        const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+
+        if (signUpErr) {
+          setErrorMsg(`Lỗi đăng ký: ${signUpErr.message}`);
+        } else if (signUpData?.user) {
+          if (signUpData.user.identities && signUpData.user.identities.length === 0) {
+            // Email đã tồn tại nhưng mật khẩu sai
+            setErrorMsg("Mật khẩu không đúng. Vui lòng thử lại.");
+          } else if (signUpData.session) {
+            // Đăng ký + tự động đăng nhập (confirm email tắt)
+            setSuccessMsg("Đăng ký thành công! Đang chuyển...");
+          } else {
+            // Đăng ký OK nhưng cần confirm email
+            setSuccessMsg("Đã tạo tài khoản! Đăng nhập lại để vào hệ thống.");
+
+            // Thử đăng nhập ngay vì email có thể đã được auto-confirm
+            setTimeout(async () => {
+              const { error: retryErr } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+              });
+              if (!retryErr) {
+                setSuccessMsg("Đăng nhập thành công!");
+              }
+            }, 1500);
+          }
+        }
+      } else if (error.message.includes("Email not confirmed")) {
+        // Email chưa confirm — thử sign in lại sau khi auto-confirm chạy
+        setErrorMsg("Email chưa xác nhận. Thử đăng nhập lại sau vài giây.");
+        setTimeout(async () => {
+          const { error: retryErr } = await supabase.auth.signInWithPassword({
             email,
             password,
           });
-
-          if (signUpErr) {
-            console.error("Sign up error:", signUpErr.message);
-            setErrorMsg(`Lỗi đăng ký: ${signUpErr.message}`);
-          } else if (signUpData?.user) {
-            // Sign up succeeded — some Supabase projects require email confirmation
-            if (signUpData.user.identities && signUpData.user.identities.length === 0) {
-              setErrorMsg("Email đã tồn tại. Vui lòng kiểm tra lại mật khẩu.");
-            } else if (!signUpData.session) {
-              setErrorMsg("Đã tạo tài khoản! Kiểm tra email xác nhận hoặc thử đăng nhập lại.");
-            }
-            // If session exists, onAuthStateChange in page.tsx will handle it
+          if (!retryErr) {
+            setSuccessMsg("Đăng nhập thành công!");
+            setErrorMsg("");
           }
-        } else if (error.message.includes("Email not confirmed")) {
-          setErrorMsg("Email chưa được xác nhận. Kiểm tra hộp thư của bạn.");
-        } else if (error.message.includes("fetch") || error.message.includes("network")) {
-          setErrorMsg("Lỗi kết nối mạng. Kiểm tra Internet và thử lại.");
-        } else {
-          setErrorMsg(`Lỗi: ${error.message}`);
-        }
+        }, 2000);
+      } else if (
+        error.message.includes("fetch") ||
+        error.message.includes("network") ||
+        error.message.includes("Failed")
+      ) {
+        setErrorMsg("Lỗi kết nối. Kiểm tra Internet và thử lại.");
+      } else {
+        setErrorMsg(`Lỗi: ${error.message}`);
       }
-      // If no error, sign in succeeded — onAuthStateChange handles the rest
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Không xác định";
       console.error("Auth exception:", err);
-      setErrorMsg(`Lỗi kết nối Supabase: ${err?.message || "Không xác định"}`);
+      setErrorMsg(`Lỗi kết nối: ${message}`);
     }
 
     setLoading(false);
@@ -79,6 +113,14 @@ export default function LoginScreen({ onAuthComplete }: LoginScreenProps) {
           <p className="text-blue-500/50 text-[10px] font-mono mt-1 tracking-wider">🧠 Brain-Optimized Schedule v2.0</p>
         </div>
 
+        {/* Success message */}
+        {successMsg && (
+          <div className="flex items-start gap-3 bg-green-900/20 border border-green-800/50 rounded-xl px-4 py-3 animate-in fade-in slide-in-from-top-4 duration-300">
+            <CheckCircle className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
+            <p className="text-green-300 text-sm">{successMsg}</p>
+          </div>
+        )}
+
         {/* Error message */}
         {errorMsg && (
           <div className="flex items-start gap-3 bg-red-900/20 border border-red-800/50 rounded-xl px-4 py-3 animate-in fade-in slide-in-from-top-4 duration-300">
@@ -91,7 +133,7 @@ export default function LoginScreen({ onAuthComplete }: LoginScreenProps) {
           <input
             type="email"
             value={email}
-            onChange={(e) => { setEmail(e.target.value); setErrorMsg(""); }}
+            onChange={(e) => { setEmail(e.target.value); setErrorMsg(""); setSuccessMsg(""); }}
             placeholder="Email"
             required
             className="w-full px-5 py-4 bg-gray-900 border border-gray-800 rounded-xl focus:border-blue-500 text-white focus:outline-none placeholder:text-gray-600 shadow-[0_4px_10px_rgba(0,0,0,0.5)] h-14"
@@ -99,8 +141,8 @@ export default function LoginScreen({ onAuthComplete }: LoginScreenProps) {
           <input
             type="password"
             value={password}
-            onChange={(e) => { setPassword(e.target.value); setErrorMsg(""); }}
-            placeholder="Mật khẩu"
+            onChange={(e) => { setPassword(e.target.value); setErrorMsg(""); setSuccessMsg(""); }}
+            placeholder="Mật khẩu (tối thiểu 6 ký tự)"
             required
             minLength={6}
             className="w-full px-5 py-4 bg-gray-900 border border-gray-800 rounded-xl focus:border-blue-500 text-white focus:outline-none placeholder:text-gray-600 shadow-[0_4px_10px_rgba(0,0,0,0.5)] h-14"
